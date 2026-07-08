@@ -211,7 +211,7 @@ dialog#modal::backdrop{background:rgba(30,20,15,0.45);}
    설정 전까지는 브라우저 localStorage로 동작합니다(이 기기에만 저장).
    ============================================================ */
 const firebaseConfig = {
-apiKey: "AIzaSyDHNv4gVm_-n4BUhKFojJWFPJUSUS0MaXU",
+  apiKey: "AIzaSyDHNv4gVm_-n4BUhKFojJWFPJUSUS0MaXU",
   authDomain: "altarservers-730a0.firebaseapp.com",
   projectId: "altarservers-730a0",
   storageBucket: "altarservers-730a0.firebasestorage.app",
@@ -1120,7 +1120,11 @@ async function renderSchedule(){
         <button class="btn secondary small" id="schedImportBtn" type="button">📁 파일로 일괄 등록</button>
       </div>
       <input type="file" id="schedFileInput" accept=".xlsx,.xls,.csv" style="display:none">
-      <p class="muted" id="schedImportStatus" style="margin-top:6px;"></p>` : ''}
+      <p class="muted" id="schedImportStatus" style="margin-top:6px;"></p>
+      <hr style="border:none;border-top:1px solid var(--line); margin:16px 0;">
+      <p class="muted">이전 버전에서 참여 복사 이름이 "이름"과 "세례명"으로 쪼개져 저장된 경우, 아래 버튼으로 한 번에 복구할 수 있어요.</p>
+      <button class="btn secondary small" id="repairNamesBtn" type="button">🔧 참여자 이름 자동 정리</button>
+      <p class="muted" id="repairStatus" style="margin-top:6px;"></p>` : ''}
     </div>
   `;
   document.getElementById('viewCalBtn').onclick = () => { scheduleViewMode='calendar'; renderSchedule(); };
@@ -1140,6 +1144,7 @@ async function renderSchedule(){
     document.getElementById('schedTemplateBtn').onclick = downloadScheduleTemplate;
     document.getElementById('schedImportBtn').onclick = () => document.getElementById('schedFileInput').click();
     document.getElementById('schedFileInput').onchange = importScheduleFile;
+    document.getElementById('repairNamesBtn').onclick = repairAllParticipantNames;
   }
 }
 window.openDayDetail = async (day) => {
@@ -1152,12 +1157,49 @@ window.openDayDetail = async (day) => {
     showDayInfo(entry, month, day);
   }
 };
+async function repairAllParticipantNames(){
+  const statusEl = document.getElementById('repairStatus');
+  const members = await collGetAll('members');
+  const memberNames = members.map(m=>m.name.trim());
+  let sched = await collGetAll('schedule');
+  let fixedEntries = 0, fixedNames = 0;
+
+  function repairOne(participants){
+    const result = [];
+    let changed = false;
+    let i = 0;
+    while (i < participants.length) {
+      const single = (participants[i]||'').trim();
+      if (memberNames.includes(single)) { result.push(single); i += 1; continue; }
+      const nextExists = i+1 < participants.length;
+      const pair = nextExists ? `${single} ${(participants[i+1]||'').trim()}` : null;
+      if (pair && memberNames.includes(pair)) { result.push(pair); i += 2; changed = true; fixedNames++; continue; }
+      result.push(single); i += 1;
+    }
+    return { result, changed };
+  }
+
+  sched = sched.map(s => {
+    if (!s.participants || s.participants.length < 2) return s;
+    const { result, changed } = repairOne(s.participants);
+    if (changed) { fixedEntries++; return { ...s, participants: result }; }
+    return s;
+  });
+
+  if (fixedEntries === 0) {
+    statusEl.textContent = '고칠 항목이 없었어요. 이미 정상입니다.';
+    return;
+  }
+  await collSetAll('schedule', sched);
+  statusEl.textContent = `완료: ${fixedEntries}개 날짜, ${fixedNames}명의 이름을 복구했어요.`;
+  renderSchedule();
+}
 function downloadScheduleTemplate(){
   const wb = XLSX.utils.book_new();
   const data = [
     ['날짜','요일','전례력','전례색','참여복사'],
-    ['7.13','월','','','홍길동, 김철수'],
-    ['7.20','월','연중 제16주일','녹','이영희, 박민수']
+    ['7.13','월','','','홍길동 프란치스코; 김철수 스테파노'],
+    ['7.20','월','연중 제16주일','녹','이영희 아녜스; 박민수 요셉']
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
   XLSX.utils.book_append_sheet(wb, ws, '일정표');
@@ -1192,7 +1234,7 @@ async function importScheduleFile(e){
         const info = await fetchLiturgyForDate(dateObj);
         if (info && info.name) { name = info.name; color = color || (info.color||''); autoFetched++; }
       }
-      const participants = String(r['참여복사']||'').split(/[,、\s]+/).map(x=>x.trim()).filter(Boolean);
+      const participants = String(r['참여복사']||'').split(/[;；\n]+/).map(x=>x.trim()).filter(Boolean);
       const weekday = String(r['요일']||'').trim() || WEEKDAY_KR[dateObj.getDay()];
       const existing = sched.find(s => s.dateLabel===dateLabel && String(s.year)===String(year));
       const rec = { id: existing?.id || uid(), year, month, day, dateLabel, weekday, name, color, participants, requests: existing?.requests || [], sortKey: year*10000+month*100+day };
@@ -1258,8 +1300,8 @@ async function scheduleModal(s, prefill){
       <div><label>요일</label><select id="sWeekday">${WEEKDAY_KR.map(w=>`<option ${(s?.weekday||prefillWeekday)===w?'selected':''}>${w}</option>`).join('')}</select></div>
     </div>
     <button class="btn small secondary" id="autoOneBtn" type="button">이 날짜 전례력 자동조회</button>
-    <label>참여 복사 (쉼표로 여러 명 구분)</label>
-    <input id="sParticipants" list="memberList" placeholder="이름1, 이름2" value="${escapeHtml((s?.participants||[]).join(', '))}">
+    <label>참여 복사 (세미콜론 ; 으로 여러 명 구분, 이름과 세례명 사이는 띄어쓰기)</label>
+    <input id="sParticipants" list="memberList" placeholder="홍길동 프란치스코; 김철수 스테파노" value="${escapeHtml((s?.participants||[]).join('; '))}">
     <datalist id="memberList">${members.map(m=>`<option value="${escapeHtml(m.name)}">`).join('')}</datalist>
     ${s && s.requests && s.requests.length ? `
       <label>일정변경 요청</label>
@@ -1292,7 +1334,7 @@ async function scheduleModal(s, prefill){
       id: s?.id || uid(), year: scheduleSelectedYear, month: parts[0], day: parts[1],
       name: document.getElementById('sName').value, color: document.getElementById('sColor').value,
       dateLabel, weekday: document.getElementById('sWeekday').value,
-      participants: document.getElementById('sParticipants').value.split(',').map(x=>x.trim()).filter(Boolean),
+      participants: document.getElementById('sParticipants').value.split(/[;；]/).map(x=>x.trim()).filter(Boolean),
       requests: s?.requests || [],
       sortKey: scheduleSelectedYear*10000 + parts[0]*100 + (parts[1]||0)
     };
