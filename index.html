@@ -12,6 +12,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
   --ink:#241a1d;
@@ -571,10 +572,60 @@ async function renderMembers(){
             </tr>`).join('') : `<tr><td colspan="${admin?5:4}" class="empty">등록된 단원이 없습니다.</td></tr>`}
         </tbody>
       </table>
-      ${admin ? '<button class="btn" id="addMemberBtn">+ 단원 추가</button>' : ''}
+      ${admin ? `<button class="btn" id="addMemberBtn">+ 단원 추가</button>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn secondary small" id="memberTemplateBtn" type="button">샘플 양식 다운로드</button>
+        <button class="btn secondary small" id="memberImportBtn" type="button">📁 파일로 일괄 등록</button>
+      </div>
+      <input type="file" id="memberFileInput" accept=".xlsx,.xls,.csv" style="display:none">
+      <p class="muted" id="memberImportStatus" style="margin-top:6px;"></p>` : ''}
     </div>
   `;
-  if (admin) document.getElementById('addMemberBtn').onclick = () => memberModal(null);
+  if (admin) {
+    document.getElementById('addMemberBtn').onclick = () => memberModal(null);
+    document.getElementById('memberTemplateBtn').onclick = downloadMemberTemplate;
+    document.getElementById('memberImportBtn').onclick = () => document.getElementById('memberFileInput').click();
+    document.getElementById('memberFileInput').onchange = importMembersFile;
+  }
+}
+function downloadMemberTemplate(){
+  const wb = XLSX.utils.book_new();
+  const data = [
+    ['이름','축일','연락처','직책'],
+    ['홍길동 프란치스코','10.4','010-1234-5678','단장']
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  XLSX.utils.book_append_sheet(wb, ws, '단원명단');
+  XLSX.writeFile(wb, '복사단원_명단_양식.xlsx');
+}
+async function importMembersFile(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('memberImportStatus');
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+    if (!rows.length) { alert('파일에서 데이터를 찾을 수 없습니다. 샘플 양식을 참고해주세요.'); return; }
+    const members = await collGetAll('members');
+    let added=0, updated=0;
+    rows.forEach(r => {
+      const name = String(r['이름']||'').trim();
+      if (!name) return;
+      const idx = members.findIndex(m=>m.name===name);
+      const rec = { id: idx>=0 ? members[idx].id : uid(), name,
+        feast: String(r['축일']||'').trim(), contact: String(r['연락처']||'').trim(), role: String(r['직책']||'').trim() };
+      if (idx>=0) { members[idx]=rec; updated++; } else { members.push(rec); added++; }
+    });
+    await collSetAll('members', members);
+    if (statusEl) statusEl.textContent = `완료: ${added}명 추가, ${updated}명 갱신`;
+  } catch(err) {
+    alert('파일을 읽는 중 오류가 발생했습니다: ' + err.message);
+  } finally {
+    e.target.value = '';
+    renderMembers();
+  }
 }
 window.editMember = async (id) => { if(!isAdmin()) return; const members = await collGetAll('members'); memberModal(members.find(m=>m.id===id)); };
 window.deleteMember = async (id) => { if(!isAdmin()) return; if (!confirm('삭제할까요?')) return; const members = await collGetAll('members'); await collSetAll('members', members.filter(m=>m.id!==id)); renderMembers(); };
@@ -712,13 +763,77 @@ async function renderSchedule(){
             </tr>`).join('') : `<tr><td colspan="${admin?5:4}" class="empty">등록된 일정이 없습니다.</td></tr>`}
         </tbody>
       </table>
-      ${admin ? '<button class="btn" id="addSchedBtn">+ 일정 직접 추가</button>' : ''}
+      ${admin ? `<button class="btn" id="addSchedBtn">+ 일정 직접 추가</button>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn secondary small" id="schedTemplateBtn" type="button">샘플 양식 다운로드</button>
+        <button class="btn secondary small" id="schedImportBtn" type="button">📁 파일로 일괄 등록</button>
+      </div>
+      <input type="file" id="schedFileInput" accept=".xlsx,.xls,.csv" style="display:none">
+      <p class="muted" id="schedImportStatus" style="margin-top:6px;"></p>` : ''}
     </div>
   `;
   document.getElementById('yearInput').onchange = (e) => { scheduleSelectedYear = parseInt(e.target.value,10) || scheduleSelectedYear; renderSchedule(); };
   if (admin) {
     document.getElementById('addSchedBtn').onclick = () => scheduleModal(null);
     document.getElementById('autoFillBtn').onclick = () => autoFillMonth(parseInt(document.getElementById('autoMonthSel').value,10));
+    document.getElementById('schedTemplateBtn').onclick = downloadScheduleTemplate;
+    document.getElementById('schedImportBtn').onclick = () => document.getElementById('schedFileInput').click();
+    document.getElementById('schedFileInput').onchange = importScheduleFile;
+  }
+}
+function downloadScheduleTemplate(){
+  const wb = XLSX.utils.book_new();
+  const data = [
+    ['날짜','요일','전례력','전례색','참여복사'],
+    ['7.13','월','','','홍길동, 김철수'],
+    ['7.20','월','연중 제16주일','녹','이영희, 박민수']
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  XLSX.utils.book_append_sheet(wb, ws, '일정표');
+  XLSX.writeFile(wb, '복사단_일정표_양식.xlsx');
+}
+async function importScheduleFile(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('schedImportStatus');
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+    if (!rows.length) { alert('파일에서 데이터를 찾을 수 없습니다. 샘플 양식을 참고해주세요.'); return; }
+    const year = scheduleSelectedYear;
+    let sched = await collGetAll('schedule');
+    let added=0, updated=0, autoFetched=0;
+    for (let i=0;i<rows.length;i++){
+      const r = rows[i];
+      const dateRaw = String(r['날짜']||'').trim();
+      if (!dateRaw) continue;
+      const parts = dateRaw.split(/[.\/]/).map(x=>parseInt(x,10));
+      if (parts.length<2 || isNaN(parts[0]) || isNaN(parts[1])) continue;
+      const month = parts[0], day = parts[1];
+      const dateLabel = `${month}.${String(day).padStart(2,'0')}`;
+      const dateObj = new Date(year, month-1, day);
+      let name = String(r['전례력']||'').trim();
+      let color = String(r['전례색']||'').trim();
+      if (!name) {
+        if (statusEl) statusEl.textContent = `전례력 자동조회 중... (${i+1}/${rows.length})`;
+        const info = await fetchLiturgyForDate(dateObj);
+        if (info && info.name) { name = info.name; color = color || (info.color||''); autoFetched++; }
+      }
+      const participants = String(r['참여복사']||'').split(/[,、\s]+/).map(x=>x.trim()).filter(Boolean);
+      const weekday = String(r['요일']||'').trim() || WEEKDAY_KR[dateObj.getDay()];
+      const existing = sched.find(s => s.dateLabel===dateLabel && String(s.year)===String(year));
+      const rec = { id: existing?.id || uid(), year, month, day, dateLabel, weekday, name, color, participants, sortKey: year*10000+month*100+day };
+      if (existing) { const idx=sched.findIndex(s=>s.id===existing.id); sched[idx]=rec; updated++; } else { sched.push(rec); added++; }
+    }
+    await collSetAll('schedule', sched);
+    if (statusEl) statusEl.textContent = `완료: ${added}건 추가, ${updated}건 갱신${autoFetched?`, 전례력 ${autoFetched}건 자동조회`:''}`;
+  } catch(err) {
+    alert('파일을 읽는 중 오류가 발생했습니다: ' + err.message);
+  } finally {
+    e.target.value = '';
+    renderSchedule();
   }
 }
 window.editSchedule = async (id) => { if(!isAdmin()) return; const sched = await collGetAll('schedule'); scheduleModal(sched.find(s=>s.id===id)); };
