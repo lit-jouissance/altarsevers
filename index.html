@@ -145,6 +145,11 @@ tr:last-child td{border-bottom:none;}
 .cal-legend{display:flex; flex-wrap:wrap; gap:9px; margin-top:14px; font-size:0.7rem; color:#8a7256;}
 .legend-item{display:flex; align-items:center; gap:4px;}
 .req-badge{color:#c0392b; font-size:0.6rem;}
+
+.meeting-section{margin-top:16px; padding-top:14px; border-top:1px solid var(--line);}
+.meeting-section:first-of-type{margin-top:0; padding-top:0; border-top:none;}
+.meeting-label{font-size:0.8rem; font-weight:700; color:var(--burgundy); margin-bottom:6px;}
+.meeting-body{white-space:pre-wrap; line-height:1.85; font-size:0.95rem; color:var(--ink);}
 .gate{text-align:center; padding:30px 16px; color:#8a7256;}
 .gate .lock{font-size:2rem; margin-bottom:10px;}
 
@@ -211,7 +216,7 @@ dialog#modal::backdrop{background:rgba(30,20,15,0.45);}
    설정 전까지는 브라우저 localStorage로 동작합니다(이 기기에만 저장).
    ============================================================ */
 const firebaseConfig = {
-  apiKey: "AIzaSyDHNv4gVm_-n4BUhKFojJWFPJUSUS0MaXU",
+   apiKey: "AIzaSyDHNv4gVm_-n4BUhKFojJWFPJUSUS0MaXU",
   authDomain: "altarservers-730a0.firebaseapp.com",
   projectId: "altarservers-730a0",
   storageBucket: "altarservers-730a0.firebasestorage.app",
@@ -897,43 +902,67 @@ async function showMeetingDetail(key){
   const admin = isAdmin();
   const data = meetings.find(m=>m.id===key) || {id:key, dateLoc:"", agenda:"", income:"", incomeDetail:"", expense:"", expenseDetail:"", notice:"", etc:""};
   const detail = document.getElementById('meetingDetail');
-  const ro = admin ? '' : 'readonly';
+  const [y, mo] = key.split('-');
+
+  if (!admin) {
+    const hasContent = data.dateLoc || data.agenda || data.income || data.expense || data.incomeDetail || data.expenseDetail || data.notice || data.etc;
+    detail.innerHTML = `
+      <hr style="border:none;border-top:1px solid var(--line); margin:16px 0;">
+      <h3 class="serif" style="margin:0 0 14px;">${y}년 ${parseInt(mo,10)}월 회합</h3>
+      ${!hasContent ? `<p class="empty">등록된 내용이 없습니다.</p>` : `
+        ${data.dateLoc ? `<div class="meeting-section"><div class="meeting-label">📍 일시 및 장소</div><div class="meeting-body">${escapeHtml(data.dateLoc)}</div></div>` : ''}
+        ${data.agenda ? `<div class="meeting-section"><div class="meeting-label">📝 안건 및 토의</div><div class="meeting-body">${escapeHtml(data.agenda)}</div></div>` : ''}
+        ${(data.income || data.expense || data.incomeDetail || data.expenseDetail) ? `
+        <div class="meeting-section">
+          <div class="meeting-label">💰 회계 보고</div>
+          <table style="margin-top:6px;">
+            ${data.income ? `<tr><th style="width:70px;">수입액</th><td>${escapeHtml(data.income)}원</td></tr>` : ''}
+            ${data.expense ? `<tr><th>지출액</th><td>${escapeHtml(data.expense)}원</td></tr>` : ''}
+          </table>
+          ${data.incomeDetail ? `<div class="muted" style="margin-top:8px; white-space:pre-wrap;">수입 내역 · ${escapeHtml(data.incomeDetail)}</div>` : ''}
+          ${data.expenseDetail ? `<div class="muted" style="margin-top:4px; white-space:pre-wrap;">지출 내역 · ${escapeHtml(data.expenseDetail)}</div>` : ''}
+        </div>` : ''}
+        ${data.notice ? `<div class="meeting-section"><div class="meeting-label">📢 공지사항</div><div class="meeting-body">${escapeHtml(data.notice)}</div></div>` : ''}
+        ${data.etc ? `<div class="meeting-section"><div class="meeting-label">기타</div><div class="meeting-body">${escapeHtml(data.etc)}</div></div>` : ''}
+      `}
+    `;
+    return;
+  }
+
   detail.innerHTML = `
     <hr style="border:none;border-top:1px solid var(--line); margin:16px 0;">
-    <label>일시 및 장소</label><input id="mdDateLoc" ${ro} value="${escapeHtml(data.dateLoc||'')}" placeholder="예: 7.7.화, 19시, 2교리실">
-    <label>안건 및 기타 토의</label><textarea id="mdAgenda" ${ro}>${escapeHtml(data.agenda||'')}</textarea>
+    <label>일시 및 장소</label><input id="mdDateLoc" value="${escapeHtml(data.dateLoc||'')}" placeholder="예: 7.7.화, 19시, 2교리실">
+    <label>안건 및 기타 토의</label><textarea id="mdAgenda">${escapeHtml(data.agenda||'')}</textarea>
     <div class="row">
-      <div><label>월 수입액</label><input id="mdIncome" ${ro} value="${escapeHtml(data.income||'')}" placeholder="원"></div>
-      <div><label>월 지출액</label><input id="mdExpense" ${ro} value="${escapeHtml(data.expense||'')}" placeholder="원"></div>
+      <div><label>월 수입액</label><input id="mdIncome" value="${escapeHtml(data.income||'')}" placeholder="원"></div>
+      <div><label>월 지출액</label><input id="mdExpense" value="${escapeHtml(data.expense||'')}" placeholder="원"></div>
     </div>
-    <label>수입 내역</label><textarea id="mdIncomeDetail" ${ro}>${escapeHtml(data.incomeDetail||'')}</textarea>
-    <label>지출 내역</label><textarea id="mdExpenseDetail" ${ro}>${escapeHtml(data.expenseDetail||'')}</textarea>
-    <label>공지사항</label><textarea id="mdNotice" ${ro}>${escapeHtml(data.notice||'')}</textarea>
-    <label>기타</label><textarea id="mdEtc" ${ro}>${escapeHtml(data.etc||'')}</textarea>
-    ${admin ? `<div class="row" style="margin-top:6px;">
+    <label>수입 내역</label><textarea id="mdIncomeDetail">${escapeHtml(data.incomeDetail||'')}</textarea>
+    <label>지출 내역</label><textarea id="mdExpenseDetail">${escapeHtml(data.expenseDetail||'')}</textarea>
+    <label>공지사항</label><textarea id="mdNotice">${escapeHtml(data.notice||'')}</textarea>
+    <label>기타</label><textarea id="mdEtc">${escapeHtml(data.etc||'')}</textarea>
+    <div class="row" style="margin-top:6px;">
       <button class="btn" id="mdSaveBtn">저장</button>
       <button class="btn danger" id="mdDelBtn">이 달 기록 삭제</button>
-    </div>` : '<p class="muted" style="margin-top:8px;">열람만 가능합니다.</p>'}
+    </div>
   `;
-  if (admin) {
-    document.getElementById('mdSaveBtn').onclick = async () => {
-      const meetings2 = await collGetAll('meetings');
-      const rec = { id: key, dateLoc: document.getElementById('mdDateLoc').value, agenda: document.getElementById('mdAgenda').value,
-        income: document.getElementById('mdIncome').value, incomeDetail: document.getElementById('mdIncomeDetail').value,
-        expense: document.getElementById('mdExpense').value, expenseDetail: document.getElementById('mdExpenseDetail').value,
-        notice: document.getElementById('mdNotice').value, etc: document.getElementById('mdEtc').value };
-      const idx = meetings2.findIndex(m=>m.id===key);
-      if (idx>=0) meetings2[idx]=rec; else meetings2.push(rec);
-      await collSetAll('meetings', meetings2);
-      renderMeetings(); setTimeout(()=>showMeetingDetail(key), 50);
-    };
-    document.getElementById('mdDelBtn').onclick = async () => {
-      if (!confirm('이 달의 회합 기록을 삭제할까요?')) return;
-      const meetings2 = await collGetAll('meetings');
-      await collSetAll('meetings', meetings2.filter(m=>m.id!==key));
-      renderMeetings();
-    };
-  }
+  document.getElementById('mdSaveBtn').onclick = async () => {
+    const meetings2 = await collGetAll('meetings');
+    const rec = { id: key, dateLoc: document.getElementById('mdDateLoc').value, agenda: document.getElementById('mdAgenda').value,
+      income: document.getElementById('mdIncome').value, incomeDetail: document.getElementById('mdIncomeDetail').value,
+      expense: document.getElementById('mdExpense').value, expenseDetail: document.getElementById('mdExpenseDetail').value,
+      notice: document.getElementById('mdNotice').value, etc: document.getElementById('mdEtc').value };
+    const idx = meetings2.findIndex(m=>m.id===key);
+    if (idx>=0) meetings2[idx]=rec; else meetings2.push(rec);
+    await collSetAll('meetings', meetings2);
+    renderMeetings(); setTimeout(()=>showMeetingDetail(key), 50);
+  };
+  document.getElementById('mdDelBtn').onclick = async () => {
+    if (!confirm('이 달의 회합 기록을 삭제할까요?')) return;
+    const meetings2 = await collGetAll('meetings');
+    await collSetAll('meetings', meetings2.filter(m=>m.id!==key));
+    renderMeetings();
+  };
 }
 
 /* ---------- 일정변경 요청 ---------- */
