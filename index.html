@@ -169,12 +169,12 @@ dialog#modal::backdrop{background:rgba(30,20,15,0.45);}
    설정 전까지는 브라우저 localStorage로 동작합니다(이 기기에만 저장).
    ============================================================ */
 const firebaseConfig = {
-   apiKey: "AIzaSyDHNv4gVm_-n4BUhKFojJWFPJUSUS0MaXU",
-  authDomain: "altarservers-730a0.firebaseapp.com",
-  projectId: "altarservers-730a0",
-  storageBucket: "altarservers-730a0.firebasestorage.app",
-  messagingSenderId: "585265846201",
-  appId: "1:585265846201:web:b0a7fb0ea5784f6b4b8868"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
 let db = null;
@@ -189,31 +189,39 @@ try {
 
 const LS_PREFIX = "boksadan_";
 
+// Firestore 요청이 응답 없이 멈추는 것을 방지 (예: Firestore DB 미생성, 네트워크 차단 등)
+function withTimeout(promise, ms = 8000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('연결 시간 초과 — Firebase/Firestore 설정을 확인해주세요.')), ms))
+  ]);
+}
+
 async function dbGet(path, fallbackDefault) {
   if (useFirebase) {
-    try { const snap = await db.doc(path).get(); return snap.exists ? snap.data() : fallbackDefault; }
-    catch(e){ console.error(e); return fallbackDefault; }
+    try { const snap = await withTimeout(db.doc(path).get()); return snap.exists ? snap.data() : fallbackDefault; }
+    catch(e){ console.error(e); alert('데이터를 불러오지 못했습니다: ' + e.message + '\n(Firestore 데이터베이스가 생성되어 있는지, 규칙이 열려있는지 확인해주세요)'); return fallbackDefault; }
   } else {
     const raw = localStorage.getItem(LS_PREFIX + path);
     return raw ? JSON.parse(raw) : fallbackDefault;
   }
 }
 async function dbDelete(path) {
-  if (useFirebase) { try { await db.doc(path).delete(); } catch(e){ console.error(e); } }
+  if (useFirebase) { try { await withTimeout(db.doc(path).delete()); } catch(e){ console.error(e); alert('삭제 중 오류: ' + e.message); } }
   else { localStorage.removeItem(LS_PREFIX + path); }
 }
 async function dbSet(path, data) {
   if (useFirebase) {
-    try { await db.doc(path).set(data, {merge:true}); }
-    catch(e){ console.error(e); alert("저장 중 오류: " + e.message); }
+    try { await withTimeout(db.doc(path).set(data, {merge:true})); }
+    catch(e){ console.error(e); alert("저장 중 오류: " + e.message + '\n(Firestore 데이터베이스가 생성되어 있는지, 규칙이 열려있는지 확인해주세요)'); }
   } else {
     localStorage.setItem(LS_PREFIX + path, JSON.stringify(data));
   }
 }
 async function collGetAll(collPath) {
   if (useFirebase) {
-    try { const snap = await db.collection(collPath).get(); const arr=[]; snap.forEach(d=>arr.push({id:d.id, ...d.data()})); return arr; }
-    catch(e){ console.error(e); return []; }
+    try { const snap = await withTimeout(db.collection(collPath).get()); const arr=[]; snap.forEach(d=>arr.push({id:d.id, ...d.data()})); return arr; }
+    catch(e){ console.error(e); alert('데이터를 불러오지 못했습니다: ' + e.message); return []; }
   } else {
     const raw = localStorage.getItem(LS_PREFIX + "coll_" + collPath);
     return raw ? JSON.parse(raw) : [];
@@ -223,11 +231,11 @@ async function collSetAll(collPath, arr) {
   if (useFirebase) {
     try {
       const batch = db.batch();
-      const existing = await db.collection(collPath).get();
+      const existing = await withTimeout(db.collection(collPath).get());
       existing.forEach(d => batch.delete(d.ref));
       arr.forEach(item => { const {id, ...rest} = item; const ref = id ? db.collection(collPath).doc(id) : db.collection(collPath).doc(); batch.set(ref, rest); });
-      await batch.commit();
-    } catch(e){ console.error(e); alert("저장 중 오류: " + e.message); }
+      await withTimeout(batch.commit());
+    } catch(e){ console.error(e); alert("저장 중 오류: " + e.message + '\n(Firestore 데이터베이스가 생성되어 있는지, 규칙이 열려있는지 확인해주세요)'); }
   } else {
     localStorage.setItem(LS_PREFIX + "coll_" + collPath, JSON.stringify(arr));
   }
