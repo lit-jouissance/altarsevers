@@ -186,12 +186,12 @@ dialog#modal::backdrop{background:rgba(30,20,15,0.45);}
    설정 전까지는 브라우저 localStorage로 동작합니다(이 기기에만 저장).
    ============================================================ */
 const firebaseConfig = {
-apiKey: "AIzaSyDHNv4gVm_-n4BUhKFojJWFPJUSUS0MaXU",
-  authDomain: "altarservers-730a0.firebaseapp.com",
-  projectId: "altarservers-730a0",
-  storageBucket: "altarservers-730a0.firebasestorage.app",
-  messagingSenderId: "585265846201",
-  appId: "1:585265846201:web:b0a7fb0ea5784f6b4b8868"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
 let db = null;
@@ -685,10 +685,24 @@ async function renderMeetings(){
       </div>
       <div id="meetingsBody" style="margin-top:14px;"></div>
       <div id="meetingDetail"></div>
+      ${admin ? `
+      <hr style="border:none;border-top:1px solid var(--line); margin:16px 0;">
+      <p class="muted">회의록 엑셀 파일로 여러 달치를 한 번에 등록할 수 있어요.</p>
+      <div class="row">
+        <button class="btn secondary small" id="meetingTemplateBtn" type="button">샘플 양식 다운로드</button>
+        <button class="btn secondary small" id="meetingImportBtn" type="button">📁 파일로 일괄 등록</button>
+      </div>
+      <input type="file" id="meetingFileInput" accept=".xlsx,.xls,.csv" style="display:none">
+      <p class="muted" id="meetingImportStatus" style="margin-top:6px;"></p>` : ''}
     </div>
   `;
   document.getElementById('viewGridBtn').onclick = () => { meetingsViewMode='grid'; renderMeetings(); };
   document.getElementById('viewListBtn').onclick = () => { meetingsViewMode='list'; renderMeetings(); };
+  if (admin) {
+    document.getElementById('meetingTemplateBtn').onclick = downloadMeetingTemplate;
+    document.getElementById('meetingImportBtn').onclick = () => document.getElementById('meetingFileInput').click();
+    document.getElementById('meetingFileInput').onchange = importMeetingsFile;
+  }
 
   const body = document.getElementById('meetingsBody');
   if (meetingsViewMode === 'grid') {
@@ -721,6 +735,56 @@ async function renderMeetings(){
       </div>`;
     }).join('') : `<p class="empty">기록된 회합이 없습니다.</p>`;
     body.querySelectorAll('[data-key]').forEach(row => row.onclick = () => showMeetingDetail(row.dataset.key));
+  }
+}
+function downloadMeetingTemplate(){
+  const wb = XLSX.utils.book_new();
+  const data = [
+    ['연도','월','일시및장소','안건','수입액','수입내역','지출액','지출내역','공지사항','기타'],
+    [2026,7,'7.7.화, 19시, 2교리실','여름 방학 일정 논의, 다음달 복사 배정 확인',50000,'단원 회비','30000','간식 구입','8월 첫째주 특별미사 안내',''],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  XLSX.utils.book_append_sheet(wb, ws, '회의록');
+  XLSX.writeFile(wb, '복사단_회의록_양식.xlsx');
+}
+async function importMeetingsFile(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('meetingImportStatus');
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+    if (!rows.length) { alert('파일에서 데이터를 찾을 수 없습니다. 샘플 양식을 참고해주세요.'); return; }
+    const meetings = await collGetAll('meetings');
+    let added=0, updated=0;
+    rows.forEach(r => {
+      const year = parseInt(r['연도'],10);
+      const month = parseInt(r['월'],10);
+      if (!year || !month) return;
+      const key = `${year}-${String(month).padStart(2,'0')}`;
+      const rec = {
+        id: key,
+        dateLoc: String(r['일시및장소']||'').trim(),
+        agenda: String(r['안건']||'').trim(),
+        income: String(r['수입액']||'').trim(),
+        incomeDetail: String(r['수입내역']||'').trim(),
+        expense: String(r['지출액']||'').trim(),
+        expenseDetail: String(r['지출내역']||'').trim(),
+        notice: String(r['공지사항']||'').trim(),
+        etc: String(r['기타']||'').trim()
+      };
+      const idx = meetings.findIndex(m=>m.id===key);
+      if (idx>=0) { meetings[idx]=rec; updated++; } else { meetings.push(rec); added++; }
+    });
+    await collSetAll('meetings', meetings);
+    if (statusEl) statusEl.textContent = `완료: ${added}건 추가, ${updated}건 갱신`;
+  } catch(err) {
+    alert('파일을 읽는 중 오류가 발생했습니다: ' + err.message);
+  } finally {
+    e.target.value = '';
+    renderMeetings();
   }
 }
 async function showMeetingDetail(key){
@@ -1052,9 +1116,44 @@ function render(tab){
   if (tab==='prayers') renderPrayers();
 }
 
+/* ---------- 실시간 공유 (Firestore onSnapshot) ---------- */
+function isModalOpen(){ const m = document.getElementById('modal'); return m && m.open; }
+let realtimeStarted = false;
+function setupRealtimeSync(){
+  if (!useFirebase || realtimeStarted) return;
+  realtimeStarted = true;
+  let firstMembers = true, firstSchedule = true, firstMeetings = true, firstConfig = true, firstRules = true, firstPrayers = true;
+  db.collection('members').onSnapshot(() => {
+    if (firstMembers) { firstMembers = false; return; }
+    if (!isModalOpen()) render(currentTab);
+  });
+  db.collection('schedule').onSnapshot(() => {
+    if (firstSchedule) { firstSchedule = false; return; }
+    if (!isModalOpen()) render(currentTab);
+  });
+  db.collection('meetings').onSnapshot(() => {
+    if (firstMeetings) { firstMeetings = false; return; }
+    if (!isModalOpen()) render(currentTab);
+  });
+  db.doc('config/main').onSnapshot(() => {
+    if (firstConfig) { firstConfig = false; return; }
+    updateHeader();
+    if (!isModalOpen()) render(currentTab);
+  });
+  db.doc('rules/main').onSnapshot(() => {
+    if (firstRules) { firstRules = false; return; }
+    if (!isModalOpen() && currentTab === 'rules') render(currentTab);
+  });
+  db.doc('prayers/main').onSnapshot(() => {
+    if (firstPrayers) { firstPrayers = false; return; }
+    if (!isModalOpen() && currentTab === 'prayers') render(currentTab);
+  });
+}
+
 updateHeader();
 updateAdminBtn();
 registerSW();
+setupRealtimeSync();
 render('home');
 </script>
 </body>
