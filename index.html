@@ -93,6 +93,7 @@ nav.bottomnav button.active{color:var(--burgundy);}
 .home-hero .date{font-size:0.82rem; opacity:0.85; letter-spacing:1.5px;}
 .home-hero .liturgy-name{font-family:'Noto Serif KR'; font-weight:700; font-size:1.35rem; margin:14px 0 6px; line-height:1.4;}
 .home-hero .colorchip{font-size:0.72rem; padding:3px 12px; border-radius:20px; background:rgba(255,255,255,0.2); display:inline-block; margin-top:2px;}
+.home-hero .gospel-title{font-family:'Noto Serif KR'; font-size:0.92rem; font-style:italic; opacity:0.92; margin-top:12px; max-width:320px; line-height:1.6;}
 .home-hero .verse{font-family:'Noto Serif KR'; font-size:1.05rem; line-height:1.85; margin-top:26px; padding-top:22px; border-top:1px solid rgba(255,255,255,0.32); max-width:340px;}
 .home-hero .ref{display:block; font-size:0.78rem; opacity:0.82; margin-top:8px;}
 .home-hero .servers-today{margin-top:22px; font-size:0.85rem; background:rgba(255,255,255,0.15); padding:8px 16px; border-radius:12px;}
@@ -143,8 +144,19 @@ tr:last-child td{border-bottom:none;}
 .cal-people{color:var(--burgundy); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:500;}
 .cal-legend{display:flex; flex-wrap:wrap; gap:9px; margin-top:14px; font-size:0.7rem; color:#8a7256;}
 .legend-item{display:flex; align-items:center; gap:4px;}
+.req-badge{color:#c0392b; font-size:0.6rem;}
 .gate{text-align:center; padding:30px 16px; color:#8a7256;}
 .gate .lock{font-size:2rem; margin-bottom:10px;}
+
+#identityGate{
+  position:fixed; inset:0; z-index:300; background:var(--burgundy);
+  display:flex; align-items:center; justify-content:center; padding:24px;
+}
+#identityGate.dismissible{background:rgba(30,20,15,0.55);}
+#identityGate .box{
+  background:#fff; color:var(--ink); border-radius:16px; padding:26px 24px;
+  max-width:360px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,0.3); position:relative;
+}
 
 dialog#modal{border:none; border-radius:16px; padding:0; max-width:440px; width:90%; box-shadow:0 10px 40px rgba(0,0,0,0.25);}
 dialog#modal::backdrop{background:rgba(30,20,15,0.45);}
@@ -182,7 +194,7 @@ dialog#modal::backdrop{background:rgba(30,20,15,0.45);}
   <nav class="bottomnav" id="tabs">
     <button data-tab="home" class="active"><span class="icon">🏠</span>홈</button>
     <button data-tab="rules"><span class="icon">📜</span>회칙</button>
-    <button data-tab="members"><span class="icon">👥</span>명단</button>
+    <button data-tab="members"><span class="icon">👥</span>복사단</button>
     <button data-tab="meetings"><span class="icon">🗓️</span>회합</button>
     <button data-tab="schedule"><span class="icon">📅</span>일정표</button>
     <button data-tab="prayers"><span class="icon">🙏</span>기도문</button>
@@ -199,7 +211,7 @@ dialog#modal::backdrop{background:rgba(30,20,15,0.45);}
    설정 전까지는 브라우저 localStorage로 동작합니다(이 기기에만 저장).
    ============================================================ */
 const firebaseConfig = {
-   apiKey: "AIzaSyDHNv4gVm_-n4BUhKFojJWFPJUSUS0MaXU",
+apiKey: "AIzaSyDHNv4gVm_-n4BUhKFojJWFPJUSUS0MaXU",
   authDomain: "altarservers-730a0.firebaseapp.com",
   projectId: "altarservers-730a0",
   storageBucket: "altarservers-730a0.firebasestorage.app",
@@ -354,6 +366,43 @@ function openModal(html){ document.getElementById('modalBody').innerHTML = html;
 function closeModal(){ document.getElementById('modal').close(); }
 function ymd(dateObj){ const y=dateObj.getFullYear(); const m=String(dateObj.getMonth()+1).padStart(2,'0'); const d=String(dateObj.getDate()).padStart(2,'0'); return `${y}${m}${d}`; }
 
+/* ---------- 회원 본인 확인 (이름 + 세례명) ---------- */
+function getMyIdentity(){
+  try { return JSON.parse(localStorage.getItem('myIdentity') || 'null'); }
+  catch(e){ return null; }
+}
+function showIdentityGate(opts={}){
+  const mandatory = opts.mandatory !== false;
+  const existing = getMyIdentity();
+  const overlay = document.createElement('div');
+  overlay.id = 'identityGate';
+  if (!mandatory) overlay.classList.add('dismissible');
+  overlay.innerHTML = `
+    <div class="box">
+      ${!mandatory ? `<span class="close-x" id="identityCloseBtn">✕</span>` : ''}
+      <h3 class="serif" style="margin-top:0;">복사단에 오신 것을 환영합니다</h3>
+      <p class="muted">이름과 세례명을 입력해주세요. 내 배정일 확인, 알림, 일정변경 요청에 사용됩니다.</p>
+      <label>이름</label>
+      <input id="idGiven" value="${escapeHtml(existing?.given||'')}" placeholder="예: 홍길동">
+      <label>세례명</label>
+      <input id="idBaptismal" value="${escapeHtml(existing?.baptismal||'')}" placeholder="예: 프란치스코">
+      <button class="btn wide" id="idSubmitBtn" style="margin-top:14px;">입장하기</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('idSubmitBtn').onclick = () => {
+    const given = document.getElementById('idGiven').value.trim();
+    const baptismal = document.getElementById('idBaptismal').value.trim();
+    if (!given || !baptismal) { alert('이름과 세례명을 모두 입력해주세요.'); return; }
+    localStorage.setItem('myIdentity', JSON.stringify({ given, baptismal, fullName: `${given} ${baptismal}` }));
+    overlay.remove();
+    render(currentTab);
+  };
+  if (!mandatory) {
+    document.getElementById('identityCloseBtn').onclick = () => overlay.remove();
+  }
+}
+
 /* ---------- 푸시 알림 (그날 배정된 복사에게만, 오전 7시경 자동 발송) ---------- */
 // 공개 VAPID 키 — 공개해도 안전한 값입니다(비밀키는 서버 환경변수에만 저장).
 const VAPID_PUBLIC_KEY = "BL3WJ3h0EGrKYZAVSzgZ-xpB_zxD3BfXbS51TqZuj_Eb2hW-Yw_ASIe8JKItIjYbbGEoheK3oKtW-NBgMHj_JGA";
@@ -452,14 +501,16 @@ async function renderHome(){
     <div class="date">${dateStr}</div>
     <div class="liturgy-name">${info && info.name ? escapeHtml(info.name) : (info ? '오늘 전례 정보 없음' : '전례력 정보를 불러올 수 없습니다')}</div>
     ${colorInfo ? `<div class="colorchip">${colorInfo.label}</div>` : ''}
+    ${info && info.gospelTitle ? `<div class="gospel-title">“${escapeHtml(info.gospelTitle)}”</div>` : ''}
     ${todayEntry && todayEntry.participants && todayEntry.participants.length ? `<div class="servers-today">오늘의 복사 · ${todayEntry.participants.map(p=>escapeHtml(p)).join(', ')}</div>` : ''}
     ${settings.verse ? `<div class="verse">“${escapeHtml(settings.verse)}”<span class="ref">${escapeHtml(settings.verseRef||'')}</span></div>` : ''}
-    <div class="note">전례력 출처: 한국천주교주교회의 매일미사(missa.cbck.or.kr)</div>
+    <div class="note">전례력·복음 말씀 출처: 한국천주교주교회의 매일미사(missa.cbck.or.kr)</div>
   `;
 
   const members = await collGetAll('members');
   const mySub = await getCurrentPushSub();
-  const myName = localStorage.getItem('myMemberName') || '';
+  const identity = getMyIdentity();
+  const myName = localStorage.getItem('myMemberName') || identity?.fullName || '';
   const isSubscribed = !!mySub;
 
   document.getElementById('homeBelow').innerHTML = `
@@ -475,6 +526,10 @@ async function renderHome(){
         ? `<p style="margin-top:10px; color:#3f5b3f; font-size:0.85rem;">✅ 이 기기에서 알림이 켜져 있습니다.</p><button class="btn danger small" id="notifyOffBtn">알림 끄기</button>`
         : `<button class="btn" id="notifyOnBtn">이 기기로 알림 받기</button>`}
     </div>
+    <div class="card">
+      <p class="muted" style="margin:0;">내 정보: <strong>${identity ? escapeHtml(identity.fullName) : '입력 안됨'}</strong>
+      <button class="btn small secondary" id="editIdentityBtn" style="margin-left:8px;">변경</button></p>
+    </div>
     ${isAdmin() ? `
     <div class="card">
       <h3>오늘의 말씀 설정</h3>
@@ -485,6 +540,7 @@ async function renderHome(){
       <button class="btn" id="saveVerseBtn">저장</button>
     </div>` : ''}
   `;
+  document.getElementById('editIdentityBtn').onclick = () => showIdentityGate({mandatory:false});
   if (isAdmin()) {
     document.getElementById('saveVerseBtn').onclick = async () => {
       await dbSet('config/main', {...settings, verse: document.getElementById('homeVerse').value, verseRef: document.getElementById('homeVerseRef').value});
@@ -561,30 +617,65 @@ async function updateHeader(){
 /* ============================================================
    3. 회칙
    ============================================================ */
+let rulesEditMode = false;
 async function renderRules(){
   const el = document.getElementById('panel-rules');
   const data = await dbGet('rules/main', {text:""});
   const admin = isAdmin();
+  const editing = admin && rulesEditMode;
   el.innerHTML = `
     <div class="card">
       <h3>복사단 회칙</h3>
-      <textarea id="rulesText" style="min-height:320px;" ${admin?'':'readonly'}>${escapeHtml(data.text||'')}</textarea>
-      ${admin ? '<button class="btn" id="saveRulesBtn">저장</button>' : '<p class="muted" style="margin-top:8px;">열람만 가능합니다.</p>'}
+      ${editing
+        ? `<textarea id="rulesText" style="min-height:320px;">${escapeHtml(data.text||'')}</textarea>
+           <div class="row" style="margin-top:8px;">
+             <button class="btn" id="saveRulesBtn">저장</button>
+             <button class="btn secondary" id="cancelRulesBtn">취소</button>
+           </div>`
+        : `<div style="white-space:pre-wrap; line-height:1.8; font-size:0.95rem;">${data.text ? escapeHtml(data.text) : '<span class="muted">등록된 회칙이 없습니다.</span>'}</div>
+           ${admin ? '<button class="btn secondary" id="editRulesBtn" style="margin-top:12px;">수정</button>' : ''}`}
     </div>
   `;
-  if (admin) document.getElementById('saveRulesBtn').onclick = async () => { await dbSet('rules/main', {text: document.getElementById('rulesText').value}); alert('저장되었습니다.'); };
+  if (editing) {
+    document.getElementById('saveRulesBtn').onclick = async () => {
+      await dbSet('rules/main', {text: document.getElementById('rulesText').value});
+      rulesEditMode = false;
+      renderRules();
+    };
+    document.getElementById('cancelRulesBtn').onclick = () => { rulesEditMode = false; renderRules(); };
+  } else if (admin) {
+    document.getElementById('editRulesBtn').onclick = () => { rulesEditMode = true; renderRules(); };
+  }
 }
 
 /* ============================================================
    4. 복사단원 명단
    ============================================================ */
+function maskContact(contact){
+  if (!contact) return '';
+  const digits = contact.replace(/[^0-9]/g, '');
+  if (digits.length < 7) return contact.replace(/./g, '*'); // 너무 짧으면 전체 마스킹
+  // 원래 구분자(하이픈 등) 형태를 최대한 유지하면서 가운데 그룹만 마스킹
+  const parts = contact.split(/(\D+)/); // 숫자/비숫자 교대로 분리
+  const numIdx = [];
+  parts.forEach((p,i)=>{ if (/^\d+$/.test(p)) numIdx.push(i); });
+  if (numIdx.length >= 3) {
+    const midIdx = numIdx[Math.floor(numIdx.length/2)];
+    parts[midIdx] = '*'.repeat(parts[midIdx].length);
+    return parts.join('');
+  }
+  // 구분자가 없는 순수 숫자: 앞 3자리, 뒤 4자리만 남기고 중간 마스킹
+  const keepFront = 3, keepBack = 4;
+  if (digits.length <= keepFront + keepBack) return digits.replace(/./g,'*');
+  return digits.slice(0,keepFront) + '*'.repeat(digits.length-keepFront-keepBack) + digits.slice(-keepBack);
+}
 async function renderMembers(){
   const el = document.getElementById('panel-members');
-  const members = await collGetAll('members');
+  const members = (await collGetAll('members')).sort((a,b)=> (a.name||'').localeCompare(b.name||'', 'ko'));
   const admin = isAdmin();
   el.innerHTML = `
     <div class="card">
-      <h3>복사단원 명단</h3>
+      <h3>복사단</h3>
       <table>
         <thead><tr><th>이름</th><th>축일</th><th>연락처</th><th>직책</th>${admin?'<th></th>':''}</tr></thead>
         <tbody>
@@ -592,7 +683,7 @@ async function renderMembers(){
             <tr>
               <td>${escapeHtml(m.name)}</td>
               <td>${escapeHtml(m.feast||'')}</td>
-              <td>${escapeHtml(m.contact||'')}</td>
+              <td>${escapeHtml(admin ? (m.contact||'') : maskContact(m.contact))}</td>
               <td>${escapeHtml(m.role||'')}</td>
               ${admin ? `<td class="actions-row">
                 <button class="btn small secondary" onclick="editMember('${m.id}')">수정</button>
@@ -845,11 +936,79 @@ async function showMeetingDetail(key){
   }
 }
 
+/* ---------- 일정변경 요청 ---------- */
+async function addScheduleRequest(entryId, message){
+  const identity = getMyIdentity();
+  if (!identity) { showIdentityGate({mandatory:true}); return; }
+  const sched = await collGetAll('schedule');
+  const idx = sched.findIndex(s=>s.id===entryId);
+  if (idx<0) return;
+  const reqs = sched[idx].requests || [];
+  reqs.push({ id: uid(), name: identity.fullName, message, ts: Date.now(), resolved:false });
+  sched[idx] = {...sched[idx], requests: reqs};
+  await collSetAll('schedule', sched);
+}
+async function resolveScheduleRequest(entryId, reqId, resolved){
+  const sched = await collGetAll('schedule');
+  const idx = sched.findIndex(s=>s.id===entryId);
+  if (idx<0) return;
+  sched[idx] = {...sched[idx], requests: (sched[idx].requests||[]).map(r=> r.id===reqId ? {...r, resolved} : r)};
+  await collSetAll('schedule', sched);
+}
+async function deleteScheduleRequest(entryId, reqId){
+  const sched = await collGetAll('schedule');
+  const idx = sched.findIndex(s=>s.id===entryId);
+  if (idx<0) return;
+  sched[idx] = {...sched[idx], requests: (sched[idx].requests||[]).filter(r=>r.id!==reqId)};
+  await collSetAll('schedule', sched);
+}
+function showDayInfo(entry, month, day){
+  const colorInfo = entry && entry.color && LITURGICAL_COLORS[entry.color] ? LITURGICAL_COLORS[entry.color] : null;
+  const reqs = entry?.requests || [];
+  openModal(`
+    <span class="close-x" onclick="closeModal()">✕</span>
+    <h3>${month}월 ${day}일</h3>
+    ${entry ? `
+      ${colorInfo ? `<p><span class="tag-color" style="background:${colorInfo.hex}"></span>${colorInfo.label}</p>` : ''}
+      <p class="serif" style="font-size:1.05rem;">${escapeHtml(entry.name||'')}</p>
+      <p class="muted">참여 복사: ${(entry.participants||[]).map(p=>escapeHtml(p)).join(', ') || '미정'}</p>
+      ${reqs.length ? `<div style="margin:12px 0;">
+        <label>일정변경 요청 내역</label>
+        ${reqs.map(r=>`<div class="item-row"><div><strong>${escapeHtml(r.name)}</strong><div class="muted">${escapeHtml(r.message)}</div></div>${r.resolved?'<span class="muted">처리됨</span>':'<span style="color:var(--burgundy);">대기중</span>'}</div>`).join('')}
+      </div>` : ''}
+      <label>일정변경 요청하기</label>
+      <textarea id="reqMsg" placeholder="예: 이 날짜에 사정이 있어 교체를 요청합니다."></textarea>
+      <button class="btn" id="reqSubmitBtn">요청 보내기</button>
+    ` : `<p class="empty">등록된 일정이 없습니다.</p>`}
+  `);
+  if (entry) {
+    document.getElementById('reqSubmitBtn').onclick = async () => {
+      const msg = document.getElementById('reqMsg').value.trim();
+      if (!msg) { alert('내용을 입력해주세요.'); return; }
+      await addScheduleRequest(entry.id, msg);
+      closeModal();
+      alert('요청이 전달되었습니다.');
+      renderSchedule();
+    };
+  }
+}
+window.resolveRequestUI = async (entryId, reqId) => {
+  await resolveScheduleRequest(entryId, reqId, true);
+  const sched = await collGetAll('schedule');
+  scheduleModal(sched.find(x=>x.id===entryId));
+};
+window.deleteRequestUI = async (entryId, reqId) => {
+  await deleteScheduleRequest(entryId, reqId);
+  const sched = await collGetAll('schedule');
+  scheduleModal(sched.find(x=>x.id===entryId));
+};
+
 /* ============================================================
    6. 복사단 일정표 — 달력 형식 + 전례색 표시
    ============================================================ */
 let scheduleSelectedYear = new Date().getFullYear();
 let scheduleSelectedMonth = new Date().getMonth() + 1;
+let scheduleViewMode = 'calendar'; // 'calendar' | 'mine'
 async function renderSchedule(){
   const el = document.getElementById('panel-schedule');
   const admin = isAdmin();
@@ -857,6 +1016,52 @@ async function renderSchedule(){
   const allSched = await collGetAll('schedule');
   const sched = allSched.filter(s => String(s.year)===String(year) && Number(s.month)===Number(month));
   const monthNames = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
+
+  const identity = getMyIdentity();
+  const viewToggleHtml = `
+    <div class="row">
+      <button class="btn small ${scheduleViewMode==='calendar'?'':'secondary'}" id="viewCalBtn" type="button">📅 달력 보기</button>
+      <button class="btn small ${scheduleViewMode==='mine'?'':'secondary'}" id="viewMineBtn" type="button">🙋 내 일정만 보기</button>
+    </div>
+  `;
+
+  if (scheduleViewMode === 'mine') {
+    const mine = (identity ? allSched.filter(s => (s.participants||[]).includes(identity.fullName)) : [])
+      .sort((a,b)=> (Number(a.year)*10000+Number(a.month)*100+Number(a.day)) - (Number(b.year)*10000+Number(b.month)*100+Number(b.day)));
+    el.innerHTML = `
+      <div class="card">
+        <h3>복사단 일정표</h3>
+        ${viewToggleHtml}
+        ${!identity ? `<p class="muted" style="margin-top:12px;">내 일정을 보려면 먼저 이름을 입력해주세요.</p><button class="btn small" id="idSetupBtn">이름 입력하기</button>` : `
+          <div style="margin-top:14px;">
+            ${mine.length ? mine.map(s => {
+              const colorInfo = s.color && LITURGICAL_COLORS[s.color] ? LITURGICAL_COLORS[s.color] : null;
+              const pendingCount = (s.requests||[]).filter(r=>!r.resolved).length;
+              return `<div class="item-row" style="cursor:pointer;" data-id="${s.id}">
+                <div>
+                  <strong>${s.year}.${s.month}.${String(s.day).padStart(2,'0')}</strong>
+                  ${colorInfo ? `<span class="tag-color" style="background:${colorInfo.hex}; margin-left:6px;"></span>` : ''}
+                  <div class="muted" style="margin-top:2px;">${escapeHtml(s.name||'')}</div>
+                </div>
+                ${pendingCount ? `<span class="muted">요청 ${pendingCount}건</span>` : `<span style="color:var(--gold);">›</span>`}
+              </div>`;
+            }).join('') : `<p class="empty">배정된 일정이 없습니다.</p>`}
+          </div>
+        `}
+      </div>
+    `;
+    document.getElementById('viewCalBtn').onclick = () => { scheduleViewMode='calendar'; renderSchedule(); };
+    document.getElementById('viewMineBtn').onclick = () => { scheduleViewMode='mine'; renderSchedule(); };
+    if (!identity) {
+      document.getElementById('idSetupBtn').onclick = () => showIdentityGate({mandatory:false});
+    } else {
+      el.querySelectorAll('[data-id]').forEach(row => row.onclick = () => {
+        const entry = mine.find(s=>s.id===row.dataset.id);
+        showDayInfo(entry, entry.month, entry.day);
+      });
+    }
+    return;
+  }
 
   const firstDow = new Date(year, month-1, 1).getDay();
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -873,8 +1078,9 @@ async function renderSchedule(){
         const colorHex = entry && entry.color && LITURGICAL_COLORS[entry.color] ? LITURGICAL_COLORS[entry.color].hex : null;
         const today = new Date();
         const isToday = today.getFullYear()===year && (today.getMonth()+1)===month && today.getDate()===d;
+        const hasPending = admin && entry && (entry.requests||[]).some(r=>!r.resolved);
         return `<div class="cal-cell${isToday?' today':''}" style="${colorHex?`border-top:4px solid ${colorHex}`:''}" onclick="openDayDetail(${d})">
-          <div class="cal-daynum">${d}</div>
+          <div class="cal-daynum">${d}${hasPending?' <span class="req-badge">●</span>':''}</div>
           ${entry ? `
             <div class="cal-name">${escapeHtml(entry.name||'')}</div>
             ${entry.participants && entry.participants.length ? `<div class="cal-people">${entry.participants.map(p=>escapeHtml(p)).join(', ')}</div>` : ''}
@@ -890,7 +1096,8 @@ async function renderSchedule(){
   el.innerHTML = `
     <div class="card">
       <h3>복사단 일정표</h3>
-      <div class="row" style="align-items:center;">
+      ${viewToggleHtml}
+      <div class="row" style="align-items:center; margin-top:10px;">
         <button class="btn small secondary" id="prevMonthBtn" type="button">‹ 이전달</button>
         <select id="yearSelSched" style="max-width:100px;">
           ${Array.from({length:5},(_,i)=>year-2+i).map(y=>`<option value="${y}" ${y===year?'selected':''}>${y}년</option>`).join('')}
@@ -916,6 +1123,8 @@ async function renderSchedule(){
       <p class="muted" id="schedImportStatus" style="margin-top:6px;"></p>` : ''}
     </div>
   `;
+  document.getElementById('viewCalBtn').onclick = () => { scheduleViewMode='calendar'; renderSchedule(); };
+  document.getElementById('viewMineBtn').onclick = () => { scheduleViewMode='mine'; renderSchedule(); };
   document.getElementById('yearSelSched').onchange = (e) => { scheduleSelectedYear = parseInt(e.target.value,10); renderSchedule(); };
   document.getElementById('monthSelSched').onchange = (e) => { scheduleSelectedMonth = parseInt(e.target.value,10); renderSchedule(); };
   document.getElementById('prevMonthBtn').onclick = () => {
@@ -940,16 +1149,7 @@ window.openDayDetail = async (day) => {
   if (isAdmin()) {
     scheduleModal(entry || null, entry ? null : { year, month, day });
   } else {
-    const colorInfo = entry && entry.color && LITURGICAL_COLORS[entry.color] ? LITURGICAL_COLORS[entry.color] : null;
-    openModal(`
-      <span class="close-x" onclick="closeModal()">✕</span>
-      <h3>${month}월 ${day}일</h3>
-      ${entry ? `
-        ${colorInfo ? `<p><span class="tag-color" style="background:${colorInfo.hex}"></span>${colorInfo.label}</p>` : ''}
-        <p class="serif" style="font-size:1.05rem;">${escapeHtml(entry.name||'')}</p>
-        <p class="muted">참여 복사: ${(entry.participants||[]).map(p=>escapeHtml(p)).join(', ') || '미정'}</p>
-      ` : `<p class="empty">등록된 일정이 없습니다.</p>`}
-    `);
+    showDayInfo(entry, month, day);
   }
 };
 function downloadScheduleTemplate(){
@@ -995,7 +1195,7 @@ async function importScheduleFile(e){
       const participants = String(r['참여복사']||'').split(/[,、\s]+/).map(x=>x.trim()).filter(Boolean);
       const weekday = String(r['요일']||'').trim() || WEEKDAY_KR[dateObj.getDay()];
       const existing = sched.find(s => s.dateLabel===dateLabel && String(s.year)===String(year));
-      const rec = { id: existing?.id || uid(), year, month, day, dateLabel, weekday, name, color, participants, sortKey: year*10000+month*100+day };
+      const rec = { id: existing?.id || uid(), year, month, day, dateLabel, weekday, name, color, participants, requests: existing?.requests || [], sortKey: year*10000+month*100+day };
       if (existing) { const idx=sched.findIndex(s=>s.id===existing.id); sched[idx]=rec; updated++; } else { sched.push(rec); added++; }
     }
     await collSetAll('schedule', sched);
@@ -1029,6 +1229,7 @@ async function autoFillMonth(month){
       weekday: WEEKDAY_KR[dateObj.getDay()],
       name: info.name, color: info.color || '',
       participants: existing?.participants || [],
+      requests: existing?.requests || [],
       sortKey: year*10000 + month*100 + d
     };
     if (existing) { const idx = sched.findIndex(s=>s.id===existing.id); sched[idx]=rec; } else { sched.push(rec); }
@@ -1060,6 +1261,16 @@ async function scheduleModal(s, prefill){
     <label>참여 복사 (쉼표로 여러 명 구분)</label>
     <input id="sParticipants" list="memberList" placeholder="이름1, 이름2" value="${escapeHtml((s?.participants||[]).join(', '))}">
     <datalist id="memberList">${members.map(m=>`<option value="${escapeHtml(m.name)}">`).join('')}</datalist>
+    ${s && s.requests && s.requests.length ? `
+      <label>일정변경 요청</label>
+      ${s.requests.map(r=>`<div class="item-row">
+        <div><strong>${escapeHtml(r.name)}</strong><div class="muted">${escapeHtml(r.message)}</div></div>
+        <div class="actions-row">
+          ${!r.resolved ? `<button class="btn small secondary" onclick="resolveRequestUI('${s.id}','${r.id}')">해결됨</button>` : `<span class="muted">해결됨</span>`}
+          <button class="btn small danger" onclick="deleteRequestUI('${s.id}','${r.id}')">삭제</button>
+        </div>
+      </div>`).join('')}
+    ` : ''}
     <button class="btn" id="sSaveBtn">저장</button>
   `);
   document.getElementById('autoOneBtn').onclick = async () => {
@@ -1082,6 +1293,7 @@ async function scheduleModal(s, prefill){
       name: document.getElementById('sName').value, color: document.getElementById('sColor').value,
       dateLabel, weekday: document.getElementById('sWeekday').value,
       participants: document.getElementById('sParticipants').value.split(',').map(x=>x.trim()).filter(Boolean),
+      requests: s?.requests || [],
       sortKey: scheduleSelectedYear*10000 + parts[0]*100 + (parts[1]||0)
     };
     const idx = sched.findIndex(x=>x.id===rec.id);
@@ -1094,27 +1306,107 @@ async function scheduleModal(s, prefill){
 /* ============================================================
    7. 복사단 기도문
    ============================================================ */
-const DEFAULT_PRAYERS = {
+const DEFAULT_PRAYERS_LEGACY = {
   beforeMass: "전능하신 하느님, 미사를 도와드리는 이 시간, 정성과 존경으로 임할 수 있도록 저희를 도와주소서. 마음을 모아 주님을 섬기게 하시고, 실수 없이 복사의 소임을 다하게 하소서. 아멘.",
   afterMass: "주님, 오늘도 미사를 도와드릴 수 있게 해 주셔서 감사합니다. 이 은혜를 잊지 않고 살아가며, 언제나 겸손한 마음으로 하느님과 이웃을 섬기게 하소서. 아멘.",
   forPriests1: "주님, 저희 사제들에게 강복하시어 그들이 하느님 백성을 충실히 이끌게 하시고, 늘 건강과 힘을 주시어 그 소임을 기쁘게 감당하게 하소서. 아멘.",
   forPriests2: "자비로우신 주님, 저희 본당 신부님들을 지켜주시고 이끌어 주소서. 그들의 손을 통해 저희에게 오시는 은총에 감사드리며, 언제나 건강과 평안 안에 머무르게 하소서. 아멘."
 };
+async function getPrayersList(){
+  let list = await collGetAll('prayers');
+  if (list.length === 0) {
+    // 이전 버전(고정 4항목) 데이터가 있으면 그대로 이관, 없으면 기본값으로 시작
+    const legacy = await dbGet('prayers/main', null);
+    const src = legacy || DEFAULT_PRAYERS_LEGACY;
+    list = [
+      { id: uid(), title: '미사 전 기도문', text: src.beforeMass||'', order: 0 },
+      { id: uid(), title: '미사 후 기도문', text: src.afterMass||'', order: 1 },
+      { id: uid(), title: '사제들을 위한 기도 1', text: src.forPriests1||'', order: 2 },
+      { id: uid(), title: '사제들을 위한 기도 2', text: src.forPriests2||'', order: 3 }
+    ];
+    await collSetAll('prayers', list);
+  }
+  return list.sort((a,b)=> (a.order||0) - (b.order||0));
+}
+let prayersView = { mode: 'list', id: null, editing: false }; // mode: 'list' | 'detail'
 async function renderPrayers(){
   const el = document.getElementById('panel-prayers');
-  const data = await dbGet('prayers/main', DEFAULT_PRAYERS);
   const admin = isAdmin();
-  const ro = admin ? '' : 'readonly';
+  const list = await getPrayersList();
+
+  if (prayersView.mode === 'detail') {
+    const p = list.find(x=>x.id===prayersView.id);
+    if (!p) { prayersView = { mode:'list', id:null, editing:false }; return renderPrayers(); }
+    el.innerHTML = `
+      <div class="card">
+        <h3>${escapeHtml(p.title)}</h3>
+        ${prayersView.editing
+          ? `<textarea id="ptext-${p.id}" style="min-height:180px;">${escapeHtml(p.text||'')}</textarea>
+             <div class="row" style="margin-top:8px;">
+               <button class="btn small" id="pSaveBtn">저장</button>
+               <button class="btn small secondary" id="pCancelBtn">취소</button>
+             </div>`
+          : `<div style="white-space:pre-wrap; line-height:1.85; font-size:0.97rem;">${p.text ? escapeHtml(p.text) : '<span class="muted">내용이 비어 있습니다.</span>'}</div>
+             ${admin ? `<div class="row" style="margin-top:12px;">
+               <button class="btn small secondary" id="pEditBtn">수정</button>
+               <button class="btn small secondary" id="pRenameBtn">제목 수정</button>
+               <button class="btn small danger" id="pDeleteBtn">삭제</button>
+             </div>` : ''}`}
+        <button class="btn wide secondary" id="pBackBtn" style="margin-top:18px;">◀ 기도문 목록으로</button>
+      </div>
+    `;
+    document.getElementById('pBackBtn').onclick = () => { prayersView = { mode:'list', id:null, editing:false }; renderPrayers(); };
+    if (prayersView.editing) {
+      document.getElementById('pSaveBtn').onclick = async () => {
+        const list2 = await collGetAll('prayers');
+        const idx = list2.findIndex(x=>x.id===p.id);
+        if (idx>=0) { list2[idx] = {...list2[idx], text: document.getElementById('ptext-'+p.id).value}; await collSetAll('prayers', list2); }
+        prayersView.editing = false;
+        renderPrayers();
+      };
+      document.getElementById('pCancelBtn').onclick = () => { prayersView.editing = false; renderPrayers(); };
+    } else if (admin) {
+      document.getElementById('pEditBtn').onclick = () => { prayersView.editing = true; renderPrayers(); };
+      document.getElementById('pRenameBtn').onclick = async () => {
+        const title = prompt('제목을 수정하세요', p.title);
+        if (!title) return;
+        const list2 = await collGetAll('prayers');
+        const idx = list2.findIndex(x=>x.id===p.id);
+        if (idx>=0) { list2[idx] = {...list2[idx], title: title.trim()}; await collSetAll('prayers', list2); }
+        renderPrayers();
+      };
+      document.getElementById('pDeleteBtn').onclick = async () => {
+        if (!confirm('이 기도문을 삭제할까요?')) return;
+        const list2 = await collGetAll('prayers');
+        await collSetAll('prayers', list2.filter(x=>x.id!==p.id));
+        prayersView = { mode:'list', id:null, editing:false };
+        renderPrayers();
+      };
+    }
+    return;
+  }
+
+  // list mode: 제목만 표시
   el.innerHTML = `
-    <div class="card"><h3>미사 전 기도문</h3><textarea id="pBefore" ${ro}>${escapeHtml(data.beforeMass||'')}</textarea></div>
-    <div class="card"><h3>미사 후 기도문</h3><textarea id="pAfter" ${ro}>${escapeHtml(data.afterMass||'')}</textarea></div>
-    <div class="card"><h3>사제들을 위한 기도 1</h3><textarea id="pPriest1" ${ro}>${escapeHtml(data.forPriests1||'')}</textarea></div>
-    <div class="card"><h3>사제들을 위한 기도 2</h3><textarea id="pPriest2" ${ro}>${escapeHtml(data.forPriests2||'')}</textarea></div>
-    ${admin ? '<button class="btn wide" id="savePrayersBtn">저장</button>' : '<p class="muted">열람만 가능합니다.</p>'}
+    <div class="card">
+      <h3>복사단 기도문</h3>
+      ${list.length ? list.map(p => `
+        <div class="item-row" style="cursor:pointer;" data-id="${p.id}">
+          <strong>${escapeHtml(p.title)}</strong>
+          <span style="color:var(--gold);">›</span>
+        </div>
+      `).join('') : '<p class="empty">등록된 기도문이 없습니다.</p>'}
+      ${admin ? `<button class="btn wide" id="addPrayerBtn" style="margin-top:14px;">+ 기도문 추가</button>` : ''}
+    </div>
   `;
-  if (admin) document.getElementById('savePrayersBtn').onclick = async () => {
-    await dbSet('prayers/main', { beforeMass: document.getElementById('pBefore').value, afterMass: document.getElementById('pAfter').value, forPriests1: document.getElementById('pPriest1').value, forPriests2: document.getElementById('pPriest2').value });
-    alert('저장되었습니다.');
+  el.querySelectorAll('[data-id]').forEach(row => row.onclick = () => { prayersView = { mode:'detail', id: row.dataset.id, editing:false }; renderPrayers(); });
+  if (admin) document.getElementById('addPrayerBtn').onclick = async () => {
+    const title = prompt('새 기도문의 제목을 입력하세요 (예: 복사단을 위한 기도)');
+    if (!title) return;
+    const list2 = await collGetAll('prayers');
+    list2.push({ id: uid(), title: title.trim(), text: '', order: list2.length });
+    await collSetAll('prayers', list2);
+    renderPrayers();
   };
 }
 
@@ -1198,7 +1490,7 @@ function setupRealtimeSync(){
     if (firstRules) { firstRules = false; return; }
     if (!isModalOpen() && currentTab === 'rules') render(currentTab);
   });
-  db.doc('prayers/main').onSnapshot(() => {
+  db.collection('prayers').onSnapshot(() => {
     if (firstPrayers) { firstPrayers = false; return; }
     if (!isModalOpen() && currentTab === 'prayers') render(currentTab);
   });
@@ -1210,6 +1502,7 @@ refreshInstallBtn();
 registerSW();
 setupRealtimeSync();
 render('home');
+if (!getMyIdentity()) showIdentityGate({mandatory:true});
 </script>
 </body>
 </html>
