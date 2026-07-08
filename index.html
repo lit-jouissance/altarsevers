@@ -117,6 +117,22 @@ tr:last-child td{border-bottom:none;}
 .month-grid button.active{background:var(--burgundy); color:#fff; border-color:var(--burgundy);}
 .month-grid button.has-data::after{content:"●"; display:block; font-size:0.5rem; color:var(--gold); margin-top:2px;}
 .tag-color{width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:5px;}
+
+/* ---------- 일정표 달력 ---------- */
+.cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:5px; margin-top:14px;}
+.cal-dow{text-align:center; font-size:0.7rem; color:#a89777; padding:2px 0 6px; font-weight:600;}
+.cal-cell{
+  min-height:60px; background:#fdfbf6; border:1px solid var(--line); border-radius:8px;
+  padding:4px 5px; font-size:0.64rem; cursor:pointer; overflow:hidden; transition:box-shadow .1s;
+}
+.cal-cell:active{box-shadow:inset 0 0 0 2px var(--gold);}
+.cal-cell.empty{background:transparent; border:none; cursor:default;}
+.cal-cell.today{background:#fff8ea; border-color:var(--gold);}
+.cal-daynum{font-weight:700; font-size:0.72rem; color:#5a4a36;}
+.cal-name{color:#6a5c48; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.cal-people{color:var(--burgundy); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:500;}
+.cal-legend{display:flex; flex-wrap:wrap; gap:9px; margin-top:14px; font-size:0.7rem; color:#8a7256;}
+.legend-item{display:flex; align-items:center; gap:4px;}
 .gate{text-align:center; padding:30px 16px; color:#8a7256;}
 .gate .lock{font-size:2rem; margin-bottom:10px;}
 
@@ -170,12 +186,12 @@ dialog#modal::backdrop{background:rgba(30,20,15,0.45);}
    설정 전까지는 브라우저 localStorage로 동작합니다(이 기기에만 저장).
    ============================================================ */
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+apiKey: "AIzaSyDHNv4gVm_-n4BUhKFojJWFPJUSUS0MaXU",
+  authDomain: "altarservers-730a0.firebaseapp.com",
+  projectId: "altarservers-730a0",
+  storageBucket: "altarservers-730a0.firebasestorage.app",
+  messagingSenderId: "585265846201",
+  appId: "1:585265846201:web:b0a7fb0ea5784f6b4b8868"
 };
 
 let db = null;
@@ -653,6 +669,7 @@ function memberModal(m){
    5. 복사단 회합
    ============================================================ */
 let meetingsSelectedYear = new Date().getFullYear();
+let meetingsViewMode = 'grid'; // 'grid' | 'list'
 async function renderMeetings(){
   const el = document.getElementById('panel-meetings');
   const meetings = await collGetAll('meetings');
@@ -663,23 +680,48 @@ async function renderMeetings(){
     <div class="card">
       <h3>복사단 회합 기록</h3>
       <div class="row">
+        <button class="btn small ${meetingsViewMode==='grid'?'':'secondary'}" id="viewGridBtn" type="button">📅 월별 보기</button>
+        <button class="btn small ${meetingsViewMode==='list'?'':'secondary'}" id="viewListBtn" type="button">📋 리스트로 보기</button>
+      </div>
+      <div id="meetingsBody" style="margin-top:14px;"></div>
+      <div id="meetingDetail"></div>
+    </div>
+  `;
+  document.getElementById('viewGridBtn').onclick = () => { meetingsViewMode='grid'; renderMeetings(); };
+  document.getElementById('viewListBtn').onclick = () => { meetingsViewMode='list'; renderMeetings(); };
+
+  const body = document.getElementById('meetingsBody');
+  if (meetingsViewMode === 'grid') {
+    body.innerHTML = `
+      <div class="row">
         <select id="yearSel">${years.map(y=>`<option value="${y}" ${String(y)===String(meetingsSelectedYear)?'selected':''}>${y}년</option>`).join('')}</select>
         ${admin ? '<button class="btn small secondary" id="addYearBtn">+ 연도 추가</button>' : ''}
       </div>
       <div class="month-grid" id="monthGrid" style="margin-top:14px;"></div>
-      <div id="meetingDetail"></div>
-    </div>
-  `;
-  document.getElementById('yearSel').onchange = (e) => { meetingsSelectedYear = e.target.value; renderMeetings(); };
-  if (admin) document.getElementById('addYearBtn').onclick = () => { const y = prompt('추가할 연도를 입력하세요 (예: 2027)'); if (y) { meetingsSelectedYear = y; renderMeetings(); } };
-
-  const grid = document.getElementById('monthGrid');
-  grid.innerHTML = Array.from({length:12}, (_,i)=>i+1).map(mo => {
-    const key = `${meetingsSelectedYear}-${String(mo).padStart(2,'0')}`;
-    const has = meetings.some(m=>m.id===key);
-    return `<button class="${has?'has-data':''}" data-key="${key}">${mo}월</button>`;
-  }).join('');
-  grid.querySelectorAll('button').forEach(b => b.onclick = () => showMeetingDetail(b.dataset.key));
+    `;
+    document.getElementById('yearSel').onchange = (e) => { meetingsSelectedYear = e.target.value; renderMeetings(); };
+    if (admin) document.getElementById('addYearBtn').onclick = () => { const y = prompt('추가할 연도를 입력하세요 (예: 2027)'); if (y) { meetingsSelectedYear = y; renderMeetings(); } };
+    const grid = document.getElementById('monthGrid');
+    grid.innerHTML = Array.from({length:12}, (_,i)=>i+1).map(mo => {
+      const key = `${meetingsSelectedYear}-${String(mo).padStart(2,'0')}`;
+      const has = meetings.some(m=>m.id===key);
+      return `<button class="${has?'has-data':''}" data-key="${key}">${mo}월</button>`;
+    }).join('');
+    grid.querySelectorAll('button').forEach(b => b.onclick = () => showMeetingDetail(b.dataset.key));
+  } else {
+    const sorted = [...meetings].sort((a,b)=> b.id.localeCompare(a.id));
+    body.innerHTML = sorted.length ? sorted.map(m => {
+      const [y, mo] = m.id.split('-');
+      return `<div class="item-row" style="cursor:pointer;" data-key="${m.id}">
+        <div>
+          <strong>${y}년 ${parseInt(mo,10)}월</strong>
+          ${m.dateLoc ? `<div class="muted" style="margin-top:2px;">${escapeHtml(m.dateLoc)}</div>` : ''}
+        </div>
+        <span style="color:var(--gold);">›</span>
+      </div>`;
+    }).join('') : `<p class="empty">기록된 회합이 없습니다.</p>`;
+    body.querySelectorAll('[data-key]').forEach(row => row.onclick = () => showMeetingDetail(row.dataset.key));
+  }
 }
 async function showMeetingDetail(key){
   document.querySelectorAll('#monthGrid button').forEach(b=>b.classList.toggle('active', b.dataset.key===key));
@@ -727,43 +769,68 @@ async function showMeetingDetail(key){
 }
 
 /* ============================================================
-   6. 복사단 일정표 — 전례력 자동조회 반영
+   6. 복사단 일정표 — 달력 형식 + 전례색 표시
    ============================================================ */
 let scheduleSelectedYear = new Date().getFullYear();
+let scheduleSelectedMonth = new Date().getMonth() + 1;
 async function renderSchedule(){
   const el = document.getElementById('panel-schedule');
   const admin = isAdmin();
-  const sched = (await collGetAll('schedule')).filter(s => String(s.year||scheduleSelectedYear)===String(scheduleSelectedYear));
-  sched.sort((a,b)=> (a.sortKey||0) - (b.sortKey||0));
+  const year = scheduleSelectedYear, month = scheduleSelectedMonth;
+  const allSched = await collGetAll('schedule');
+  const sched = allSched.filter(s => String(s.year)===String(year) && Number(s.month)===Number(month));
   const monthNames = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
+
+  const firstDow = new Date(year, month-1, 1).getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const cells = [];
+  for (let i=0;i<firstDow;i++) cells.push(null);
+  for (let d=1; d<=daysInMonth; d++) cells.push(d);
+
+  const calHtml = `
+    <div class="cal-grid">
+      ${WEEKDAY_KR.map(w=>`<div class="cal-dow">${w}</div>`).join('')}
+      ${cells.map(d => {
+        if (d===null) return `<div class="cal-cell empty"></div>`;
+        const entry = sched.find(s=>Number(s.day)===d);
+        const colorHex = entry && entry.color && LITURGICAL_COLORS[entry.color] ? LITURGICAL_COLORS[entry.color].hex : null;
+        const today = new Date();
+        const isToday = today.getFullYear()===year && (today.getMonth()+1)===month && today.getDate()===d;
+        return `<div class="cal-cell${isToday?' today':''}" style="${colorHex?`border-top:4px solid ${colorHex}`:''}" onclick="openDayDetail(${d})">
+          <div class="cal-daynum">${d}</div>
+          ${entry ? `
+            <div class="cal-name">${escapeHtml(entry.name||'')}</div>
+            ${entry.participants && entry.participants.length ? `<div class="cal-people">${entry.participants.map(p=>escapeHtml(p)).join(', ')}</div>` : ''}
+          ` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="cal-legend">
+      ${Object.entries(LITURGICAL_COLORS).map(([k,v])=>`<span class="legend-item"><span class="tag-color" style="background:${v.hex}"></span>${v.label}</span>`).join('')}
+    </div>
+  `;
 
   el.innerHTML = `
     <div class="card">
       <h3>복사단 일정표</h3>
+      <div class="row" style="align-items:center;">
+        <button class="btn small secondary" id="prevMonthBtn" type="button">‹ 이전달</button>
+        <select id="yearSelSched" style="max-width:100px;">
+          ${Array.from({length:5},(_,i)=>year-2+i).map(y=>`<option value="${y}" ${y===year?'selected':''}>${y}년</option>`).join('')}
+        </select>
+        <select id="monthSelSched" style="max-width:90px;">
+          ${monthNames.map((n,i)=>`<option value="${i+1}" ${i+1===month?'selected':''}>${n}</option>`).join('')}
+        </select>
+        <button class="btn small secondary" id="nextMonthBtn" type="button">다음달 ›</button>
+      </div>
+      ${calHtml}
+      <p class="muted" style="margin-top:10px;">날짜 칸을 누르면 그 날의 일정을 ${admin?'추가/수정':'확인'}할 수 있어요.</p>
+      ${admin ? `
+      <hr style="border:none;border-top:1px solid var(--line); margin:16px 0;">
       <div class="row">
-        <input id="yearInput" type="number" value="${scheduleSelectedYear}" style="max-width:110px;">
-        ${admin ? `
-        <select id="autoMonthSel">${monthNames.map((n,i)=>`<option value="${i+1}">${n}</option>`).join('')}</select>
-        <button class="btn small" id="autoFillBtn">전례력 자동 불러오기</button>` : ''}
+        <button class="btn small" id="autoFillBtn">이 달 전례력 자동 불러오기</button>
       </div>
       <p class="muted" id="autoStatus" style="margin-top:6px;"></p>
-      <table style="margin-top:10px;">
-        <thead><tr><th>전례력</th><th>날짜</th><th>요일</th><th>복사</th>${admin?'<th></th>':''}</tr></thead>
-        <tbody>
-          ${sched.length ? sched.map(s => `
-            <tr>
-              <td>${s.color ? `<span class="tag-color" style="background:${LITURGICAL_COLORS[s.color]?.hex||'#999'}"></span>`:''}${escapeHtml(s.name||'')}</td>
-              <td>${escapeHtml(s.dateLabel||'')}</td>
-              <td>${escapeHtml(s.weekday||'')}</td>
-              <td>${(s.participants||[]).map(p=>escapeHtml(p)).join(', ')}</td>
-              ${admin ? `<td class="actions-row">
-                <button class="btn small secondary" onclick="editSchedule('${s.id}')">수정</button>
-                <button class="btn small danger" onclick="deleteSchedule('${s.id}')">삭제</button>
-              </td>` : ''}
-            </tr>`).join('') : `<tr><td colspan="${admin?5:4}" class="empty">등록된 일정이 없습니다.</td></tr>`}
-        </tbody>
-      </table>
-      ${admin ? `<button class="btn" id="addSchedBtn">+ 일정 직접 추가</button>
       <div class="row" style="margin-top:8px;">
         <button class="btn secondary small" id="schedTemplateBtn" type="button">샘플 양식 다운로드</button>
         <button class="btn secondary small" id="schedImportBtn" type="button">📁 파일로 일괄 등록</button>
@@ -772,15 +839,42 @@ async function renderSchedule(){
       <p class="muted" id="schedImportStatus" style="margin-top:6px;"></p>` : ''}
     </div>
   `;
-  document.getElementById('yearInput').onchange = (e) => { scheduleSelectedYear = parseInt(e.target.value,10) || scheduleSelectedYear; renderSchedule(); };
+  document.getElementById('yearSelSched').onchange = (e) => { scheduleSelectedYear = parseInt(e.target.value,10); renderSchedule(); };
+  document.getElementById('monthSelSched').onchange = (e) => { scheduleSelectedMonth = parseInt(e.target.value,10); renderSchedule(); };
+  document.getElementById('prevMonthBtn').onclick = () => {
+    scheduleSelectedMonth--; if (scheduleSelectedMonth<1){ scheduleSelectedMonth=12; scheduleSelectedYear--; }
+    renderSchedule();
+  };
+  document.getElementById('nextMonthBtn').onclick = () => {
+    scheduleSelectedMonth++; if (scheduleSelectedMonth>12){ scheduleSelectedMonth=1; scheduleSelectedYear++; }
+    renderSchedule();
+  };
   if (admin) {
-    document.getElementById('addSchedBtn').onclick = () => scheduleModal(null);
-    document.getElementById('autoFillBtn').onclick = () => autoFillMonth(parseInt(document.getElementById('autoMonthSel').value,10));
+    document.getElementById('autoFillBtn').onclick = () => autoFillMonth(scheduleSelectedMonth);
     document.getElementById('schedTemplateBtn').onclick = downloadScheduleTemplate;
     document.getElementById('schedImportBtn').onclick = () => document.getElementById('schedFileInput').click();
     document.getElementById('schedFileInput').onchange = importScheduleFile;
   }
 }
+window.openDayDetail = async (day) => {
+  const year = scheduleSelectedYear, month = scheduleSelectedMonth;
+  const sched = await collGetAll('schedule');
+  const entry = sched.find(s => String(s.year)===String(year) && Number(s.month)===Number(month) && Number(s.day)===day);
+  if (isAdmin()) {
+    scheduleModal(entry || null, entry ? null : { year, month, day });
+  } else {
+    const colorInfo = entry && entry.color && LITURGICAL_COLORS[entry.color] ? LITURGICAL_COLORS[entry.color] : null;
+    openModal(`
+      <span class="close-x" onclick="closeModal()">✕</span>
+      <h3>${month}월 ${day}일</h3>
+      ${entry ? `
+        ${colorInfo ? `<p><span class="tag-color" style="background:${colorInfo.hex}"></span>${colorInfo.label}</p>` : ''}
+        <p class="serif" style="font-size:1.05rem;">${escapeHtml(entry.name||'')}</p>
+        <p class="muted">참여 복사: ${(entry.participants||[]).map(p=>escapeHtml(p)).join(', ') || '미정'}</p>
+      ` : `<p class="empty">등록된 일정이 없습니다.</p>`}
+    `);
+  }
+};
 function downloadScheduleTemplate(){
   const wb = XLSX.utils.book_new();
   const data = [
@@ -868,8 +962,10 @@ async function autoFillMonth(month){
   renderSchedule();
 }
 
-async function scheduleModal(s){
+async function scheduleModal(s, prefill){
   const members = await collGetAll('members');
+  const prefillDateLabel = prefill ? `${prefill.month}.${String(prefill.day).padStart(2,'0')}` : '';
+  const prefillWeekday = prefill ? WEEKDAY_KR[new Date(prefill.year, prefill.month-1, prefill.day).getDay()] : '';
   openModal(`
     <span class="close-x" onclick="closeModal()">✕</span>
     <h3>${s?'일정 수정':'일정 추가'}</h3>
@@ -880,8 +976,8 @@ async function scheduleModal(s){
       ${Object.entries(LITURGICAL_COLORS).map(([k,v])=>`<option value="${k}" ${s?.color===k?'selected':''}>${v.label}</option>`).join('')}
     </select>
     <div class="row">
-      <div><label>날짜 (예: 7.12)</label><input id="sDate" value="${escapeHtml(s?.dateLabel||'')}"></div>
-      <div><label>요일</label><select id="sWeekday">${WEEKDAY_KR.map(w=>`<option ${s?.weekday===w?'selected':''}>${w}</option>`).join('')}</select></div>
+      <div><label>날짜 (예: 7.12)</label><input id="sDate" value="${escapeHtml(s?.dateLabel||prefillDateLabel)}"></div>
+      <div><label>요일</label><select id="sWeekday">${WEEKDAY_KR.map(w=>`<option ${(s?.weekday||prefillWeekday)===w?'selected':''}>${w}</option>`).join('')}</select></div>
     </div>
     <button class="btn small secondary" id="autoOneBtn" type="button">이 날짜 전례력 자동조회</button>
     <label>참여 복사 (쉼표로 여러 명 구분)</label>
