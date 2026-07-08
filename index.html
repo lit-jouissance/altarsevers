@@ -7,6 +7,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="복사단">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>복사단</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
@@ -52,6 +56,12 @@ header.top .subtitle{font-size:0.72rem; color:#9c8b74;}
   display:flex; align-items:center; gap:4px; white-space:nowrap;
 }
 #adminBtn.on{background:var(--burgundy); color:#fff; border-color:var(--burgundy);}
+#installBtn{
+  border:1px solid var(--gold); background:#fff8ea; color:#8a6a2a;
+  padding:6px 10px; border-radius:20px; font-size:0.72rem; cursor:pointer;
+  white-space:nowrap;
+}
+.header-actions{display:flex; align-items:center; gap:6px;}
 
 main{flex:1; padding-bottom:calc(78px + var(--safe-b));}
 section.panel{padding:16px 16px 6px; animation:fade .2s ease;}
@@ -153,7 +163,10 @@ dialog#modal::backdrop{background:rgba(30,20,15,0.45);}
       <div class="title" id="parishTitle">복사단</div>
       <div class="subtitle" id="dioceseSubtitle">교구 · 성당명을 설정에서 입력하세요</div>
     </div>
-    <button id="adminBtn">🔒 관리자</button>
+    <div class="header-actions">
+      <button id="installBtn">📲 설치</button>
+      <button id="adminBtn">🔒 관리자</button>
+    </div>
   </header>
 
   <main id="panels">
@@ -1116,6 +1129,47 @@ function render(tab){
   if (tab==='prayers') renderPrayers();
 }
 
+/* ---------- 홈 화면 설치 (PWA) ---------- */
+let deferredInstallPrompt = null;
+function isStandalone(){
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+function refreshInstallBtn(){
+  const btn = document.getElementById('installBtn');
+  if (!btn) return;
+  btn.style.display = isStandalone() ? 'none' : 'inline-block';
+}
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  refreshInstallBtn();
+});
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  refreshInstallBtn();
+});
+document.getElementById('installBtn').addEventListener('click', async () => {
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    document.getElementById('installBtn').style.display = 'none';
+  } else {
+    const ua = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    openModal(`
+      <span class="close-x" onclick="closeModal()">✕</span>
+      <h3>홈 화면에 설치하기</h3>
+      ${isIOS ? `
+        <p>iPhone/iPad(Safari)에서는:</p>
+        <p>1. 하단 공유 버튼(⬆️)을 누르세요<br>2. "홈 화면에 추가"를 선택하세요<br>3. "추가"를 누르면 앱처럼 아이콘이 생깁니다</p>
+      ` : `
+        <p>사용 중인 브라우저 메뉴(⋮ 또는 ···)에서<br>"앱 설치" 또는 "홈 화면에 추가"를 선택해주세요.</p>
+      `}
+    `);
+  }
+});
+
 /* ---------- 실시간 공유 (Firestore onSnapshot) ---------- */
 function isModalOpen(){ const m = document.getElementById('modal'); return m && m.open; }
 let realtimeStarted = false;
@@ -1152,6 +1206,7 @@ function setupRealtimeSync(){
 
 updateHeader();
 updateAdminBtn();
+refreshInstallBtn();
 registerSW();
 setupRealtimeSync();
 render('home');
