@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#6d1f2b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>복사단</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+:root{
+  --ink:#241a1d;
+  --parchment:#f6f1e6;
+  --burgundy:#6d1f2b;
+  --burgundy-deep:#4c151e;
+  --gold:#b6893c;
+  --line:#e3d9c2;
+  --shadow: 0 2px 10px rgba(60,40,20,0.08);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0; overscroll-behavior-y:none;}
+body{
+  font-family:'Noto Sans KR', sans-serif;
+  background:var(--parchment);
+  color:var(--ink);
+  min-height:100vh;
+}
+h1,h2,h3,.serif{font-family:'Noto Serif KR', serif;}
+#app{max-width:520px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column;}
+
+/* ---------- top bar ---------- */
+header.top{
+  padding:calc(12px + var(--safe-t)) 16px 12px;
+  background:#fff; border-bottom:1px solid var(--line);
+  display:flex; align-items:center; justify-content:space-between;
+  position:sticky; top:0; z-index:40;
+}
+header.top .titles{line-height:1.3;}
+header.top .title{font-size:1.05rem; font-weight:700; font-family:'Noto Serif KR';}
+header.top .subtitle{font-size:0.72rem; color:#9c8b74;}
+#adminBtn{
+  border:1px solid var(--line); background:#fdfbf6; color:#7a6a52;
+  padding:6px 10px; border-radius:20px; font-size:0.72rem; cursor:pointer;
+  display:flex; align-items:center; gap:4px; white-space:nowrap;
+}
+#adminBtn.on{background:var(--burgundy); color:#fff; border-color:var(--burgundy);}
+
+main{flex:1; padding-bottom:calc(78px + var(--safe-b));}
+section.panel{padding:16px 16px 6px; animation:fade .2s ease;}
+@keyframes fade{from{opacity:0} to{opacity:1}}
+
+/* ---------- bottom nav ---------- */
+nav.bottomnav{
+  position:fixed; left:0; right:0; bottom:0; z-index:50;
+  max-width:520px; margin:0 auto;
+  display:flex; background:#fff; border-top:1px solid var(--line);
+  padding-bottom:var(--safe-b);
+  box-shadow:0 -2px 12px rgba(60,40,20,0.06);
+}
+nav.bottomnav button{
+  flex:1; border:none; background:transparent; cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  padding:9px 2px 8px; color:#a89777; font-size:0.62rem; font-weight:500;
+}
+nav.bottomnav button .icon{font-size:1.15rem; line-height:1;}
+nav.bottomnav button.active{color:var(--burgundy);}
+
+/* ---------- home hero ---------- */
+.home-hero{
+  min-height:calc(100vh - 66px - 78px - var(--safe-t) - var(--safe-b));
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  text-align:center; color:#fff; padding:36px 26px; border-radius:0;
+  transition:background-color .5s ease;
+}
+.home-hero .date{font-size:0.82rem; opacity:0.85; letter-spacing:1.5px;}
+.home-hero .liturgy-name{font-family:'Noto Serif KR'; font-weight:700; font-size:1.35rem; margin:14px 0 6px; line-height:1.4;}
+.home-hero .colorchip{font-size:0.72rem; padding:3px 12px; border-radius:20px; background:rgba(255,255,255,0.2); display:inline-block; margin-top:2px;}
+.home-hero .verse{font-family:'Noto Serif KR'; font-size:1.05rem; line-height:1.85; margin-top:26px; padding-top:22px; border-top:1px solid rgba(255,255,255,0.32); max-width:340px;}
+.home-hero .ref{display:block; font-size:0.78rem; opacity:0.82; margin-top:8px;}
+.home-hero .servers-today{margin-top:22px; font-size:0.85rem; background:rgba(255,255,255,0.15); padding:8px 16px; border-radius:12px;}
+.home-hero .note{margin-top:16px; font-size:0.68rem; opacity:0.7;}
+.home-below{padding:16px 16px 0;}
+
+/* ---------- cards / forms ---------- */
+.card{background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin-bottom:14px; box-shadow:var(--shadow);}
+.card h3{margin:0 0 12px; font-size:1rem; border-bottom:2px solid var(--gold); padding-bottom:8px; display:inline-block;}
+label{display:block; font-size:0.78rem; color:#8a7256; margin:10px 0 4px; font-weight:500;}
+input,select,textarea{width:100%; padding:10px 11px; border:1px solid var(--line); border-radius:8px; font-family:'Noto Sans KR'; font-size:0.95rem; background:#fffdf9;}
+input[readonly],textarea[readonly]{background:#f4f0e6; color:#6a5c48;}
+textarea{resize:vertical; min-height:70px;}
+button.btn{background:var(--burgundy); color:#fff; border:none; padding:11px 18px; border-radius:8px; font-size:0.9rem; cursor:pointer; font-weight:500; margin-top:10px;}
+button.btn.secondary{background:transparent; color:var(--burgundy); border:1px solid var(--burgundy);}
+button.btn.danger{background:transparent; color:#a13; border:1px solid #a13;}
+button.btn.small{padding:7px 12px; font-size:0.78rem; margin:0;}
+button.btn.wide{width:100%;}
+button:disabled{opacity:0.45; cursor:not-allowed;}
+.row{display:flex; gap:8px; flex-wrap:wrap;}
+.row > *{flex:1; min-width:120px;}
+
+table{width:100%; border-collapse:collapse; font-size:0.85rem;}
+th,td{padding:8px 5px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top;}
+th{color:#8a7256; font-weight:600; font-size:0.72rem;}
+tr:last-child td{border-bottom:none;}
+.actions-row{display:flex; gap:6px; flex-wrap:wrap;}
+.empty{text-align:center; color:#a99; padding:24px 10px; font-size:0.88rem;}
+.muted{color:#998; font-size:0.78rem;}
+.month-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:14px;}
+.month-grid button{padding:10px 4px; border-radius:8px; border:1px solid var(--line); background:#fff; cursor:pointer; font-size:0.85rem;}
+.month-grid button.active{background:var(--burgundy); color:#fff; border-color:var(--burgundy);}
+.month-grid button.has-data::after{content:"●"; display:block; font-size:0.5rem; color:var(--gold); margin-top:2px;}
+.tag-color{width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:5px;}
+.gate{text-align:center; padding:30px 16px; color:#8a7256;}
+.gate .lock{font-size:2rem; margin-bottom:10px;}
+
+dialog#modal{border:none; border-radius:16px; padding:0; max-width:440px; width:90%; box-shadow:0 10px 40px rgba(0,0,0,0.25);}
+dialog#modal::backdrop{background:rgba(30,20,15,0.45);}
+.modal-inner{padding:20px 22px; max-height:82vh; overflow-y:auto;}
+.modal-inner h3{margin-top:0;}
+.close-x{float:right; cursor:pointer; font-size:1.1rem; color:#998;}
+.syncbadge{font-size:0.68rem; padding:2px 0; color:#a89777;}
+.spin{display:inline-block; width:12px; height:12px; border:2px solid rgba(0,0,0,0.15); border-top-color:var(--burgundy); border-radius:50%; animation:sp .7s linear infinite; vertical-align:middle; margin-right:6px;}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="titles">
+      <div class="title" id="parishTitle">복사단</div>
+      <div class="subtitle" id="dioceseSubtitle">교구 · 성당명을 설정에서 입력하세요</div>
+    </div>
+    <button id="adminBtn">🔒 관리자</button>
+  </header>
+
+  <main id="panels">
+    <section class="panel" id="panel-home" style="padding:0;"></section>
+    <section class="panel" id="panel-settings" style="display:none"></section>
+    <section class="panel" id="panel-rules" style="display:none"></section>
+    <section class="panel" id="panel-members" style="display:none"></section>
+    <section class="panel" id="panel-meetings" style="display:none"></section>
+    <section class="panel" id="panel-schedule" style="display:none"></section>
+    <section class="panel" id="panel-prayers" style="display:none"></section>
+  </main>
+
+  <nav class="bottomnav" id="tabs">
+    <button data-tab="home" class="active"><span class="icon">🏠</span>홈</button>
+    <button data-tab="rules"><span class="icon">📜</span>회칙</button>
+    <button data-tab="members"><span class="icon">👥</span>명단</button>
+    <button data-tab="meetings"><span class="icon">🗓️</span>회합</button>
+    <button data-tab="schedule"><span class="icon">📅</span>일정표</button>
+    <button data-tab="prayers"><span class="icon">🙏</span>기도문</button>
+    <button data-tab="settings"><span class="icon">⚙️</span>설정</button>
+  </nav>
+</div>
+
+<dialog id="modal"><div class="modal-inner" id="modalBody"></div></dialog>
+
+<script>
+/* ============================================================
+   Firebase 설정 — 다른 프로젝트들과 동일한 방식입니다.
+   Firebase 콘솔 > 프로젝트 설정 > 일반 > 내 앱 에서 값을 복사해 붙여넣으세요.
+   설정 전까지는 브라우저 localStorage로 동작합니다(이 기기에만 저장).
+   ============================================================ */
+const firebaseConfig = {
+   apiKey: "AIzaSyDHNv4gVm_-n4BUhKFojJWFPJUSUS0MaXU",
+  authDomain: "altarservers-730a0.firebaseapp.com",
+  projectId: "altarservers-730a0",
+  storageBucket: "altarservers-730a0.firebasestorage.app",
+  messagingSenderId: "585265846201",
+  appId: "1:585265846201:web:b0a7fb0ea5784f6b4b8868"
+};
+
+let db = null;
+let useFirebase = false;
+try {
+  if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    useFirebase = true;
+  }
+} catch(e) { console.warn("Firebase init 실패, localStorage로 동작합니다.", e); }
+
+const LS_PREFIX = "boksadan_";
+
+async function dbGet(path, fallbackDefault) {
+  if (useFirebase) {
+    try { const snap = await db.doc(path).get(); return snap.exists ? snap.data() : fallbackDefault; }
+    catch(e){ console.error(e); return fallbackDefault; }
+  } else {
+    const raw = localStorage.getItem(LS_PREFIX + path);
+    return raw ? JSON.parse(raw) : fallbackDefault;
+  }
+}
+async function dbDelete(path) {
+  if (useFirebase) { try { await db.doc(path).delete(); } catch(e){ console.error(e); } }
+  else { localStorage.removeItem(LS_PREFIX + path); }
+}
+async function dbSet(path, data) {
+  if (useFirebase) {
+    try { await db.doc(path).set(data, {merge:true}); }
+    catch(e){ console.error(e); alert("저장 중 오류: " + e.message); }
+  } else {
+    localStorage.setItem(LS_PREFIX + path, JSON.stringify(data));
+  }
+}
+async function collGetAll(collPath) {
+  if (useFirebase) {
+    try { const snap = await db.collection(collPath).get(); const arr=[]; snap.forEach(d=>arr.push({id:d.id, ...d.data()})); return arr; }
+    catch(e){ console.error(e); return []; }
+  } else {
+    const raw = localStorage.getItem(LS_PREFIX + "coll_" + collPath);
+    return raw ? JSON.parse(raw) : [];
+  }
+}
+async function collSetAll(collPath, arr) {
+  if (useFirebase) {
+    try {
+      const batch = db.batch();
+      const existing = await db.collection(collPath).get();
+      existing.forEach(d => batch.delete(d.ref));
+      arr.forEach(item => { const {id, ...rest} = item; const ref = id ? db.collection(collPath).doc(id) : db.collection(collPath).doc(); batch.set(ref, rest); });
+      await batch.commit();
+    } catch(e){ console.error(e); alert("저장 중 오류: " + e.message); }
+  } else {
+    localStorage.setItem(LS_PREFIX + "coll_" + collPath, JSON.stringify(arr));
+  }
+}
+
+/* ---------- 관리자 인증 ---------- */
+function isAdmin(){ return sessionStorage.getItem('isAdmin') === '1'; }
+function setAdmin(on){ if(on) sessionStorage.setItem('isAdmin','1'); else sessionStorage.removeItem('isAdmin'); updateAdminBtn(); }
+async function updateAdminBtn(){
+  const btn = document.getElementById('adminBtn');
+  if (isAdmin()) {
+    const cfg = await dbGet('config/main', {});
+    btn.textContent = `🔓 ${cfg.adminName ? cfg.adminName+' · ' : ''}로그아웃`;
+    btn.classList.add('on');
+  } else {
+    btn.textContent = '🔒 관리자';
+    btn.classList.remove('on');
+  }
+}
+document.getElementById('adminBtn').addEventListener('click', async () => {
+  if (isAdmin()) {
+    if (confirm('관리자 모드를 종료할까요?')) { setAdmin(false); render(currentTab); }
+    return;
+  }
+  const cfg = await dbGet('config/main', {});
+  if (!cfg.adminPin) {
+    openModal(`
+      <span class="close-x" onclick="closeModal()">✕</span>
+      <h3>관리자 PIN 최초 설정</h3>
+      <p class="muted">아직 관리자 PIN이 설정되지 않았습니다. 복사단원 중 관리자 1명을 정하고 PIN을 만들어주세요.</p>
+      <label>관리자 이름</label>
+      <input id="firstAdminName" placeholder="예: 문은주 요한보스코">
+      <label>PIN (숫자/문자 자유, 4자 이상 권장)</label>
+      <input id="firstAdminPin" type="password">
+      <button class="btn" id="firstAdminSaveBtn">설정하고 로그인</button>
+    `);
+    document.getElementById('firstAdminSaveBtn').onclick = async () => {
+      const name = document.getElementById('firstAdminName').value.trim();
+      const pin = document.getElementById('firstAdminPin').value.trim();
+      if (!name || !pin) { alert('이름과 PIN을 모두 입력해주세요.'); return; }
+      await dbSet('config/main', {...cfg, adminName:name, adminPin:pin});
+      setAdmin(true);
+      closeModal();
+      render(currentTab);
+    };
+  } else {
+    openModal(`
+      <span class="close-x" onclick="closeModal()">✕</span>
+      <h3>관리자 로그인</h3>
+      <label>PIN</label>
+      <input id="loginPin" type="password" autofocus>
+      <button class="btn" id="loginBtn">로그인</button>
+    `);
+    document.getElementById('loginBtn').onclick = async () => {
+      const pin = document.getElementById('loginPin').value;
+      const cfg2 = await dbGet('config/main', {});
+      if (pin && pin === cfg2.adminPin) { setAdmin(true); closeModal(); render(currentTab); }
+      else alert('PIN이 올바르지 않습니다.');
+    };
+  }
+});
+
+function gateHtml(msg){
+  return `<div class="gate"><div class="lock">🔒</div><p>${msg || '관리자만 수정할 수 있습니다.'}</p>
+  <button class="btn secondary" onclick="document.getElementById('adminBtn').click()">관리자 로그인</button></div>`;
+}
+
+/* ---------- 공통 유틸 ---------- */
+const DIOCESES = ["의정부교구","부산교구","광주대교구","마산교구","인천교구","춘천교구","전주교구",
+  "원주교구","청주교구","대구대교구","대전교구","군종교구","수원교구","서울대교구","제주교구","안동교구"];
+
+// 매일미사(missa.cbck.or.kr) 표기 기준 전례색 코드
+const LITURGICAL_COLORS = {
+  "녹":{label:"연중 시기 (녹색)", hex:"#3f5b3f"},
+  "백":{label:"축일/대축일 (백색)", hex:"#a68a4a"},
+  "홍":{label:"순교자·성령 (홍색)", hex:"#8b1e3f"},
+  "자":{label:"대림·사순 (자색)", hex:"#4b2e5c"},
+  "장":{label:"자우데테·래타레 (장미색)", hex:"#c98a94"},
+  "흑":{label:"위령 (흑색)", hex:"#2a2a2a"}
+};
+const WEEKDAY_KR = ["일","월","화","수","목","금","토"];
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function escapeHtml(s){ return (s||"").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function openModal(html){ document.getElementById('modalBody').innerHTML = html; document.getElementById('modal').showModal(); }
+function closeModal(){ document.getElementById('modal').close(); }
+function ymd(dateObj){ const y=dateObj.getFullYear(); const m=String(dateObj.getMonth()+1).padStart(2,'0'); const d=String(dateObj.getDate()).padStart(2,'0'); return `${y}${m}${d}`; }
+
+/* ---------- 푸시 알림 (그날 배정된 복사에게만, 오전 7시경 자동 발송) ---------- */
+// 공개 VAPID 키 — 공개해도 안전한 값입니다(비밀키는 서버 환경변수에만 저장).
+const VAPID_PUBLIC_KEY = "BL3WJ3h0EGrKYZAVSzgZ-xpB_zxD3BfXbS51TqZuj_Eb2hW-Yw_ASIe8JKItIjYbbGEoheK3oKtW-NBgMHj_JGA";
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+let swRegistration = null;
+async function registerSW(){
+  if (!('serviceWorker' in navigator)) return null;
+  try { swRegistration = await navigator.serviceWorker.register('/sw.js'); return swRegistration; }
+  catch(e){ console.warn('서비스 워커 등록 실패', e); return null; }
+}
+async function getCurrentPushSub(){
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+  const reg = await navigator.serviceWorker.ready.catch(()=>null);
+  if (!reg) return null;
+  return await reg.pushManager.getSubscription();
+}
+async function subscribeForPush(name){
+  if (!name) { alert('이름을 먼저 선택해주세요.'); return; }
+  if (!useFirebase) { alert('알림 기능은 Firebase 연동 후에만 사용할 수 있습니다. (설정 탭 참고)'); return; }
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    alert('이 브라우저는 푸시 알림을 지원하지 않습니다. iOS는 홈 화면에 앱을 추가한 뒤 그 아이콘으로 열어서 다시 시도해주세요.');
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') { alert('알림 권한이 허용되지 않았습니다. 브라우저 설정에서 알림을 허용해주세요.'); return; }
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) });
+  }
+  await dbSet(`pushSubscriptions/${name}`, {...sub.toJSON(), name});
+  localStorage.setItem('myMemberName', name);
+  renderHome();
+}
+async function unsubscribeFromPush(name){
+  const sub = await getCurrentPushSub();
+  if (sub) await sub.unsubscribe().catch(()=>{});
+  if (name) await dbDelete(`pushSubscriptions/${name}`);
+  renderHome();
+}
+
+/* ---------- 전례력 자동조회 (missa.cbck.or.kr 연동 API) ---------- */
+async function fetchLiturgyForDate(dateObj){
+  try {
+    const r = await fetch(`/api/liturgy?date=${ymd(dateObj)}`);
+    if (!r.ok) throw new Error('status '+r.status);
+    return await r.json(); // {date, color, name, raw}
+  } catch(e) {
+    console.warn('전례력 조회 실패(로컬 미리보기이거나 Vercel 배포 전일 수 있습니다):', e);
+    return null;
+  }
+}
+
+/* ---------- 탭 전환 ---------- */
+const panels = ["home","settings","rules","members","meetings","schedule","prayers"];
+let currentTab = "home";
+document.getElementById('tabs').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-tab]');
+  if (!btn) return;
+  currentTab = btn.dataset.tab;
+  panels.forEach(p => document.getElementById('panel-'+p).style.display = (p===currentTab ? 'block':'none'));
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('active', b===btn));
+  render(currentTab);
+});
+
+/* ============================================================
+   1. 홈 — 전례색 단색 배경 + 오늘 말씀
+   ============================================================ */
+async function renderHome(){
+  const el = document.getElementById('panel-home');
+  const settings = await dbGet('config/main', {verse:"", verseRef:""});
+  const today = new Date();
+  const dateStr = today.toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric'}) + " (" + WEEKDAY_KR[today.getDay()] + ")";
+
+  el.innerHTML = `<div class="home-hero" id="homeHero" style="background:${'#6d1f2b'}">
+      <div class="spin"></div> 오늘의 전례력을 불러오는 중...
+    </div>
+    <div class="home-below" id="homeBelow"></div>`;
+
+  const info = await fetchLiturgyForDate(today);
+  const colorInfo = info && info.color && LITURGICAL_COLORS[info.color] ? LITURGICAL_COLORS[info.color] : null;
+  const bg = colorInfo ? colorInfo.hex : "#6d1f2b";
+
+  // 일정표에서 오늘 참여 복사 찾기 (있으면 표시)
+  const sched = await collGetAll('schedule');
+  const todayKey = `${today.getMonth()+1}.${String(today.getDate()).padStart(2,'0')}`;
+  const todayEntry = sched.find(s => s.dateLabel === todayKey && String(s.year||today.getFullYear())===String(today.getFullYear()));
+
+  document.getElementById('homeHero').style.background = bg;
+  document.getElementById('homeHero').innerHTML = `
+    <div class="date">${dateStr}</div>
+    <div class="liturgy-name">${info && info.name ? escapeHtml(info.name) : (info ? '오늘 전례 정보 없음' : '전례력 정보를 불러올 수 없습니다')}</div>
+    ${colorInfo ? `<div class="colorchip">${colorInfo.label}</div>` : ''}
+    ${todayEntry && todayEntry.participants && todayEntry.participants.length ? `<div class="servers-today">오늘의 복사 · ${todayEntry.participants.map(p=>escapeHtml(p)).join(', ')}</div>` : ''}
+    ${settings.verse ? `<div class="verse">“${escapeHtml(settings.verse)}”<span class="ref">${escapeHtml(settings.verseRef||'')}</span></div>` : ''}
+    <div class="note">전례력 출처: 한국천주교주교회의 매일미사(missa.cbck.or.kr)</div>
+  `;
+
+  const members = await collGetAll('members');
+  const mySub = await getCurrentPushSub();
+  const myName = localStorage.getItem('myMemberName') || '';
+  const isSubscribed = !!mySub;
+
+  document.getElementById('homeBelow').innerHTML = `
+    <div class="card">
+      <h3>🔔 배정일 알림</h3>
+      <p class="muted">내 이름을 선택하고 알림을 켜두면, 복사로 배정된 날 오전 7시쯤 이 기기로 알림이 옵니다.</p>
+      <label>내 이름</label>
+      <select id="notifyNameSel">
+        <option value="">선택하세요</option>
+        ${members.map(m=>`<option value="${escapeHtml(m.name)}" ${myName===m.name?'selected':''}>${escapeHtml(m.name)}</option>`).join('')}
+      </select>
+      ${isSubscribed
+        ? `<p style="margin-top:10px; color:#3f5b3f; font-size:0.85rem;">✅ 이 기기에서 알림이 켜져 있습니다.</p><button class="btn danger small" id="notifyOffBtn">알림 끄기</button>`
+        : `<button class="btn" id="notifyOnBtn">이 기기로 알림 받기</button>`}
+    </div>
+    ${isAdmin() ? `
+    <div class="card">
+      <h3>오늘의 말씀 설정</h3>
+      <label>말씀 문구</label>
+      <textarea id="homeVerse">${escapeHtml(settings.verse||'')}</textarea>
+      <label>출처 (예: 마태오 5,14-16)</label>
+      <input id="homeVerseRef" value="${escapeHtml(settings.verseRef||'')}">
+      <button class="btn" id="saveVerseBtn">저장</button>
+    </div>` : ''}
+  `;
+  if (isAdmin()) {
+    document.getElementById('saveVerseBtn').onclick = async () => {
+      await dbSet('config/main', {...settings, verse: document.getElementById('homeVerse').value, verseRef: document.getElementById('homeVerseRef').value});
+      renderHome();
+    };
+  }
+  if (isSubscribed) {
+    document.getElementById('notifyOffBtn').onclick = () => unsubscribeFromPush(document.getElementById('notifyNameSel').value || myName);
+  } else {
+    document.getElementById('notifyOnBtn').onclick = () => subscribeForPush(document.getElementById('notifyNameSel').value);
+  }
+}
+
+/* ============================================================
+   2. 설정 (관리자 전용)
+   ============================================================ */
+async function renderSettings(){
+  const el = document.getElementById('panel-settings');
+  if (!isAdmin()) { el.innerHTML = gateHtml('교구·성당 정보 및 관리자 설정은 관리자만 변경할 수 있습니다.'); return; }
+  const settings = await dbGet('config/main', {diocese:"", parishName:"", adminName:"", adminPin:""});
+  const members = await collGetAll('members');
+  el.innerHTML = `
+    <div class="card">
+      <h3>교구 · 성당 정보</h3>
+      <label>교구</label>
+      <select id="dioceseSel">
+        <option value="">선택하세요</option>
+        ${DIOCESES.map(d=>`<option value="${d}" ${settings.diocese===d?'selected':''}>${d}</option>`).join('')}
+      </select>
+      <label>성당명</label>
+      <input id="parishInput" placeholder="예: 남원 자비의 예수 성당" value="${escapeHtml(settings.parishName||'')}">
+      <button class="btn" id="saveSettingsBtn">저장</button>
+    </div>
+    <div class="card">
+      <h3>관리자 계정</h3>
+      <label>관리자 (복사단원 중 선택)</label>
+      <select id="adminMemberSel">
+        <option value="">직접 입력</option>
+        ${members.map(m=>`<option value="${escapeHtml(m.name)}" ${settings.adminName===m.name?'selected':''}>${escapeHtml(m.name)}</option>`).join('')}
+      </select>
+      <input id="adminNameInput" placeholder="관리자 이름" value="${escapeHtml(settings.adminName||'')}" style="margin-top:6px;">
+      <label>PIN 변경</label>
+      <input id="adminPinInput" type="password" placeholder="새 PIN (변경 시에만 입력)">
+      <button class="btn" id="saveAdminBtn">관리자 정보 저장</button>
+    </div>
+    <div class="card">
+      <h3>연동 상태</h3>
+      <p class="syncbadge">${useFirebase ? '☁ Firebase Firestore에 연결되어 실시간으로 저장됩니다.' : '💾 이 기기에만 저장 중입니다. index.html 상단 firebaseConfig에 값을 입력하면 여러 단원이 데이터를 공유할 수 있습니다.'}</p>
+      <p class="syncbadge">전례력 자동조회 API: /api/liturgy (Vercel에 배포된 후에만 정상 동작합니다)</p>
+    </div>
+  `;
+  document.getElementById('adminMemberSel').onchange = (e) => { if (e.target.value) document.getElementById('adminNameInput').value = e.target.value; };
+  document.getElementById('saveSettingsBtn').onclick = async () => {
+    await dbSet('config/main', {...settings, diocese: document.getElementById('dioceseSel').value, parishName: document.getElementById('parishInput').value});
+    updateHeader(); renderSettings();
+  };
+  document.getElementById('saveAdminBtn').onclick = async () => {
+    const newPin = document.getElementById('adminPinInput').value.trim();
+    const patch = {...settings, adminName: document.getElementById('adminNameInput').value.trim()};
+    if (newPin) patch.adminPin = newPin;
+    await dbSet('config/main', patch);
+    updateAdminBtn();
+    alert('저장되었습니다.');
+    renderSettings();
+  };
+}
+
+async function updateHeader(){
+  const settings = await dbGet('config/main', {diocese:"", parishName:""});
+  document.getElementById('parishTitle').textContent = settings.parishName ? `${settings.parishName} 복사단` : "복사단";
+  document.getElementById('dioceseSubtitle').textContent = (settings.diocese || settings.parishName) ? `${settings.diocese||''} ${settings.parishName||''}`.trim() : "교구 · 성당명을 설정에서 입력하세요";
+}
+
+/* ============================================================
+   3. 회칙
+   ============================================================ */
+async function renderRules(){
+  const el = document.getElementById('panel-rules');
+  const data = await dbGet('rules/main', {text:""});
+  const admin = isAdmin();
+  el.innerHTML = `
+    <div class="card">
+      <h3>복사단 회칙</h3>
+      <textarea id="rulesText" style="min-height:320px;" ${admin?'':'readonly'}>${escapeHtml(data.text||'')}</textarea>
+      ${admin ? '<button class="btn" id="saveRulesBtn">저장</button>' : '<p class="muted" style="margin-top:8px;">열람만 가능합니다.</p>'}
+    </div>
+  `;
+  if (admin) document.getElementById('saveRulesBtn').onclick = async () => { await dbSet('rules/main', {text: document.getElementById('rulesText').value}); alert('저장되었습니다.'); };
+}
+
+/* ============================================================
+   4. 복사단원 명단
+   ============================================================ */
+async function renderMembers(){
+  const el = document.getElementById('panel-members');
+  const members = await collGetAll('members');
+  const admin = isAdmin();
+  el.innerHTML = `
+    <div class="card">
+      <h3>복사단원 명단</h3>
+      <table>
+        <thead><tr><th>이름</th><th>축일</th><th>연락처</th><th>직책</th>${admin?'<th></th>':''}</tr></thead>
+        <tbody>
+          ${members.length ? members.map(m => `
+            <tr>
+              <td>${escapeHtml(m.name)}</td>
+              <td>${escapeHtml(m.feast||'')}</td>
+              <td>${escapeHtml(m.contact||'')}</td>
+              <td>${escapeHtml(m.role||'')}</td>
+              ${admin ? `<td class="actions-row">
+                <button class="btn small secondary" onclick="editMember('${m.id}')">수정</button>
+                <button class="btn small danger" onclick="deleteMember('${m.id}')">삭제</button>
+              </td>`:''}
+            </tr>`).join('') : `<tr><td colspan="${admin?5:4}" class="empty">등록된 단원이 없습니다.</td></tr>`}
+        </tbody>
+      </table>
+      ${admin ? '<button class="btn" id="addMemberBtn">+ 단원 추가</button>' : ''}
+    </div>
+  `;
+  if (admin) document.getElementById('addMemberBtn').onclick = () => memberModal(null);
+}
+window.editMember = async (id) => { if(!isAdmin()) return; const members = await collGetAll('members'); memberModal(members.find(m=>m.id===id)); };
+window.deleteMember = async (id) => { if(!isAdmin()) return; if (!confirm('삭제할까요?')) return; const members = await collGetAll('members'); await collSetAll('members', members.filter(m=>m.id!==id)); renderMembers(); };
+function memberModal(m){
+  openModal(`
+    <span class="close-x" onclick="closeModal()">✕</span>
+    <h3>${m?'단원 정보 수정':'단원 추가'}</h3>
+    <label>이름(세례명)</label><input id="mName" value="${escapeHtml(m?.name||'')}">
+    <label>축일 (예: 9.21)</label><input id="mFeast" value="${escapeHtml(m?.feast||'')}">
+    <label>연락처</label><input id="mContact" value="${escapeHtml(m?.contact||'')}">
+    <label>직책</label><input id="mRole" placeholder="단장, 총무 등" value="${escapeHtml(m?.role||'')}">
+    <button class="btn" id="mSaveBtn">저장</button>
+  `);
+  document.getElementById('mSaveBtn').onclick = async () => {
+    const members = await collGetAll('members');
+    const rec = { id: m?.id || uid(), name: document.getElementById('mName').value, feast: document.getElementById('mFeast').value, contact: document.getElementById('mContact').value, role: document.getElementById('mRole').value };
+    const idx = members.findIndex(x=>x.id===rec.id);
+    if (idx>=0) members[idx]=rec; else members.push(rec);
+    await collSetAll('members', members);
+    closeModal(); renderMembers();
+  };
+}
+
+/* ============================================================
+   5. 복사단 회합
+   ============================================================ */
+let meetingsSelectedYear = new Date().getFullYear();
+async function renderMeetings(){
+  const el = document.getElementById('panel-meetings');
+  const meetings = await collGetAll('meetings');
+  const admin = isAdmin();
+  const years = Array.from(new Set(meetings.map(m=>m.id.split('-')[0]).concat([String(meetingsSelectedYear)]))).sort();
+
+  el.innerHTML = `
+    <div class="card">
+      <h3>복사단 회합 기록</h3>
+      <div class="row">
+        <select id="yearSel">${years.map(y=>`<option value="${y}" ${String(y)===String(meetingsSelectedYear)?'selected':''}>${y}년</option>`).join('')}</select>
+        ${admin ? '<button class="btn small secondary" id="addYearBtn">+ 연도 추가</button>' : ''}
+      </div>
+      <div class="month-grid" id="monthGrid" style="margin-top:14px;"></div>
+      <div id="meetingDetail"></div>
+    </div>
+  `;
+  document.getElementById('yearSel').onchange = (e) => { meetingsSelectedYear = e.target.value; renderMeetings(); };
+  if (admin) document.getElementById('addYearBtn').onclick = () => { const y = prompt('추가할 연도를 입력하세요 (예: 2027)'); if (y) { meetingsSelectedYear = y; renderMeetings(); } };
+
+  const grid = document.getElementById('monthGrid');
+  grid.innerHTML = Array.from({length:12}, (_,i)=>i+1).map(mo => {
+    const key = `${meetingsSelectedYear}-${String(mo).padStart(2,'0')}`;
+    const has = meetings.some(m=>m.id===key);
+    return `<button class="${has?'has-data':''}" data-key="${key}">${mo}월</button>`;
+  }).join('');
+  grid.querySelectorAll('button').forEach(b => b.onclick = () => showMeetingDetail(b.dataset.key));
+}
+async function showMeetingDetail(key){
+  document.querySelectorAll('#monthGrid button').forEach(b=>b.classList.toggle('active', b.dataset.key===key));
+  const meetings = await collGetAll('meetings');
+  const admin = isAdmin();
+  const data = meetings.find(m=>m.id===key) || {id:key, dateLoc:"", agenda:"", income:"", incomeDetail:"", expense:"", expenseDetail:"", notice:"", etc:""};
+  const detail = document.getElementById('meetingDetail');
+  const ro = admin ? '' : 'readonly';
+  detail.innerHTML = `
+    <hr style="border:none;border-top:1px solid var(--line); margin:16px 0;">
+    <label>일시 및 장소</label><input id="mdDateLoc" ${ro} value="${escapeHtml(data.dateLoc||'')}" placeholder="예: 7.7.화, 19시, 2교리실">
+    <label>안건 및 기타 토의</label><textarea id="mdAgenda" ${ro}>${escapeHtml(data.agenda||'')}</textarea>
+    <div class="row">
+      <div><label>월 수입액</label><input id="mdIncome" ${ro} value="${escapeHtml(data.income||'')}" placeholder="원"></div>
+      <div><label>월 지출액</label><input id="mdExpense" ${ro} value="${escapeHtml(data.expense||'')}" placeholder="원"></div>
+    </div>
+    <label>수입 내역</label><textarea id="mdIncomeDetail" ${ro}>${escapeHtml(data.incomeDetail||'')}</textarea>
+    <label>지출 내역</label><textarea id="mdExpenseDetail" ${ro}>${escapeHtml(data.expenseDetail||'')}</textarea>
+    <label>공지사항</label><textarea id="mdNotice" ${ro}>${escapeHtml(data.notice||'')}</textarea>
+    <label>기타</label><textarea id="mdEtc" ${ro}>${escapeHtml(data.etc||'')}</textarea>
+    ${admin ? `<div class="row" style="margin-top:6px;">
+      <button class="btn" id="mdSaveBtn">저장</button>
+      <button class="btn danger" id="mdDelBtn">이 달 기록 삭제</button>
+    </div>` : '<p class="muted" style="margin-top:8px;">열람만 가능합니다.</p>'}
+  `;
+  if (admin) {
+    document.getElementById('mdSaveBtn').onclick = async () => {
+      const meetings2 = await collGetAll('meetings');
+      const rec = { id: key, dateLoc: document.getElementById('mdDateLoc').value, agenda: document.getElementById('mdAgenda').value,
+        income: document.getElementById('mdIncome').value, incomeDetail: document.getElementById('mdIncomeDetail').value,
+        expense: document.getElementById('mdExpense').value, expenseDetail: document.getElementById('mdExpenseDetail').value,
+        notice: document.getElementById('mdNotice').value, etc: document.getElementById('mdEtc').value };
+      const idx = meetings2.findIndex(m=>m.id===key);
+      if (idx>=0) meetings2[idx]=rec; else meetings2.push(rec);
+      await collSetAll('meetings', meetings2);
+      renderMeetings(); setTimeout(()=>showMeetingDetail(key), 50);
+    };
+    document.getElementById('mdDelBtn').onclick = async () => {
+      if (!confirm('이 달의 회합 기록을 삭제할까요?')) return;
+      const meetings2 = await collGetAll('meetings');
+      await collSetAll('meetings', meetings2.filter(m=>m.id!==key));
+      renderMeetings();
+    };
+  }
+}
+
+/* ============================================================
+   6. 복사단 일정표 — 전례력 자동조회 반영
+   ============================================================ */
+let scheduleSelectedYear = new Date().getFullYear();
+async function renderSchedule(){
+  const el = document.getElementById('panel-schedule');
+  const admin = isAdmin();
+  const sched = (await collGetAll('schedule')).filter(s => String(s.year||scheduleSelectedYear)===String(scheduleSelectedYear));
+  sched.sort((a,b)=> (a.sortKey||0) - (b.sortKey||0));
+  const monthNames = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
+
+  el.innerHTML = `
+    <div class="card">
+      <h3>복사단 일정표</h3>
+      <div class="row">
+        <input id="yearInput" type="number" value="${scheduleSelectedYear}" style="max-width:110px;">
+        ${admin ? `
+        <select id="autoMonthSel">${monthNames.map((n,i)=>`<option value="${i+1}">${n}</option>`).join('')}</select>
+        <button class="btn small" id="autoFillBtn">전례력 자동 불러오기</button>` : ''}
+      </div>
+      <p class="muted" id="autoStatus" style="margin-top:6px;"></p>
+      <table style="margin-top:10px;">
+        <thead><tr><th>전례력</th><th>날짜</th><th>요일</th><th>복사</th>${admin?'<th></th>':''}</tr></thead>
+        <tbody>
+          ${sched.length ? sched.map(s => `
+            <tr>
+              <td>${s.color ? `<span class="tag-color" style="background:${LITURGICAL_COLORS[s.color]?.hex||'#999'}"></span>`:''}${escapeHtml(s.name||'')}</td>
+              <td>${escapeHtml(s.dateLabel||'')}</td>
+              <td>${escapeHtml(s.weekday||'')}</td>
+              <td>${(s.participants||[]).map(p=>escapeHtml(p)).join(', ')}</td>
+              ${admin ? `<td class="actions-row">
+                <button class="btn small secondary" onclick="editSchedule('${s.id}')">수정</button>
+                <button class="btn small danger" onclick="deleteSchedule('${s.id}')">삭제</button>
+              </td>` : ''}
+            </tr>`).join('') : `<tr><td colspan="${admin?5:4}" class="empty">등록된 일정이 없습니다.</td></tr>`}
+        </tbody>
+      </table>
+      ${admin ? '<button class="btn" id="addSchedBtn">+ 일정 직접 추가</button>' : ''}
+    </div>
+  `;
+  document.getElementById('yearInput').onchange = (e) => { scheduleSelectedYear = parseInt(e.target.value,10) || scheduleSelectedYear; renderSchedule(); };
+  if (admin) {
+    document.getElementById('addSchedBtn').onclick = () => scheduleModal(null);
+    document.getElementById('autoFillBtn').onclick = () => autoFillMonth(parseInt(document.getElementById('autoMonthSel').value,10));
+  }
+}
+window.editSchedule = async (id) => { if(!isAdmin()) return; const sched = await collGetAll('schedule'); scheduleModal(sched.find(s=>s.id===id)); };
+window.deleteSchedule = async (id) => { if(!isAdmin()) return; if (!confirm('삭제할까요?')) return; const sched = await collGetAll('schedule'); await collSetAll('schedule', sched.filter(s=>s.id!==id)); renderSchedule(); };
+
+async function autoFillMonth(month){
+  const statusEl = document.getElementById('autoStatus');
+  const year = scheduleSelectedYear;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  let sched = await collGetAll('schedule');
+  let added = 0, failed = 0;
+  for (let d=1; d<=daysInMonth; d++){
+    statusEl.innerHTML = `<span class="spin"></span> ${month}월 전례력 불러오는 중... (${d}/${daysInMonth})`;
+    const dateObj = new Date(year, month-1, d);
+    const info = await fetchLiturgyForDate(dateObj);
+    if (!info || !info.name) { failed++; continue; }
+    const dateLabel = `${month}.${String(d).padStart(2,'0')}`;
+    const existing = sched.find(s => s.dateLabel===dateLabel && String(s.year)===String(year));
+    const rec = {
+      id: existing?.id || uid(),
+      year, month, day:d, dateLabel,
+      weekday: WEEKDAY_KR[dateObj.getDay()],
+      name: info.name, color: info.color || '',
+      participants: existing?.participants || [],
+      sortKey: year*10000 + month*100 + d
+    };
+    if (existing) { const idx = sched.findIndex(s=>s.id===existing.id); sched[idx]=rec; } else { sched.push(rec); }
+    added++;
+  }
+  await collSetAll('schedule', sched);
+  statusEl.textContent = `완료: ${added}일 반영${failed?`, ${failed}일 조회 실패`:''} (참여 복사는 각 날짜를 수정해서 입력해주세요)`;
+  renderSchedule();
+}
+
+async function scheduleModal(s){
+  const members = await collGetAll('members');
+  openModal(`
+    <span class="close-x" onclick="closeModal()">✕</span>
+    <h3>${s?'일정 수정':'일정 추가'}</h3>
+    <label>전례력 명칭</label><input id="sName" placeholder="예: 연중 제15주일" value="${escapeHtml(s?.name||'')}">
+    <label>전례색</label>
+    <select id="sColor">
+      <option value="">선택 안함</option>
+      ${Object.entries(LITURGICAL_COLORS).map(([k,v])=>`<option value="${k}" ${s?.color===k?'selected':''}>${v.label}</option>`).join('')}
+    </select>
+    <div class="row">
+      <div><label>날짜 (예: 7.12)</label><input id="sDate" value="${escapeHtml(s?.dateLabel||'')}"></div>
+      <div><label>요일</label><select id="sWeekday">${WEEKDAY_KR.map(w=>`<option ${s?.weekday===w?'selected':''}>${w}</option>`).join('')}</select></div>
+    </div>
+    <button class="btn small secondary" id="autoOneBtn" type="button">이 날짜 전례력 자동조회</button>
+    <label>참여 복사 (쉼표로 여러 명 구분)</label>
+    <input id="sParticipants" list="memberList" placeholder="이름1, 이름2" value="${escapeHtml((s?.participants||[]).join(', '))}">
+    <datalist id="memberList">${members.map(m=>`<option value="${escapeHtml(m.name)}">`).join('')}</datalist>
+    <button class="btn" id="sSaveBtn">저장</button>
+  `);
+  document.getElementById('autoOneBtn').onclick = async () => {
+    const dl = document.getElementById('sDate').value;
+    const parts = dl.split('.').map(x=>parseInt(x,10));
+    if (parts.length<2 || isNaN(parts[0]) || isNaN(parts[1])) { alert('날짜를 "월.일" 형식으로 먼저 입력해주세요 (예: 7.12)'); return; }
+    const dateObj = new Date(scheduleSelectedYear, parts[0]-1, parts[1]);
+    const info = await fetchLiturgyForDate(dateObj);
+    if (!info || !info.name) { alert('전례력 정보를 가져오지 못했습니다. (Vercel 배포 후 이용 가능)'); return; }
+    document.getElementById('sName').value = info.name;
+    if (info.color && LITURGICAL_COLORS[info.color]) document.getElementById('sColor').value = info.color;
+    document.getElementById('sWeekday').value = WEEKDAY_KR[dateObj.getDay()];
+  };
+  document.getElementById('sSaveBtn').onclick = async () => {
+    const sched = await collGetAll('schedule');
+    const dateLabel = document.getElementById('sDate').value;
+    const parts = dateLabel.split('.').map(x=>parseInt(x,10)||0);
+    const rec = {
+      id: s?.id || uid(), year: scheduleSelectedYear, month: parts[0], day: parts[1],
+      name: document.getElementById('sName').value, color: document.getElementById('sColor').value,
+      dateLabel, weekday: document.getElementById('sWeekday').value,
+      participants: document.getElementById('sParticipants').value.split(',').map(x=>x.trim()).filter(Boolean),
+      sortKey: scheduleSelectedYear*10000 + parts[0]*100 + (parts[1]||0)
+    };
+    const idx = sched.findIndex(x=>x.id===rec.id);
+    if (idx>=0) sched[idx]=rec; else sched.push(rec);
+    await collSetAll('schedule', sched);
+    closeModal(); renderSchedule();
+  };
+}
+
+/* ============================================================
+   7. 복사단 기도문
+   ============================================================ */
+const DEFAULT_PRAYERS = {
+  beforeMass: "전능하신 하느님, 미사를 도와드리는 이 시간, 정성과 존경으로 임할 수 있도록 저희를 도와주소서. 마음을 모아 주님을 섬기게 하시고, 실수 없이 복사의 소임을 다하게 하소서. 아멘.",
+  afterMass: "주님, 오늘도 미사를 도와드릴 수 있게 해 주셔서 감사합니다. 이 은혜를 잊지 않고 살아가며, 언제나 겸손한 마음으로 하느님과 이웃을 섬기게 하소서. 아멘.",
+  forPriests1: "주님, 저희 사제들에게 강복하시어 그들이 하느님 백성을 충실히 이끌게 하시고, 늘 건강과 힘을 주시어 그 소임을 기쁘게 감당하게 하소서. 아멘.",
+  forPriests2: "자비로우신 주님, 저희 본당 신부님들을 지켜주시고 이끌어 주소서. 그들의 손을 통해 저희에게 오시는 은총에 감사드리며, 언제나 건강과 평안 안에 머무르게 하소서. 아멘."
+};
+async function renderPrayers(){
+  const el = document.getElementById('panel-prayers');
+  const data = await dbGet('prayers/main', DEFAULT_PRAYERS);
+  const admin = isAdmin();
+  const ro = admin ? '' : 'readonly';
+  el.innerHTML = `
+    <div class="card"><h3>미사 전 기도문</h3><textarea id="pBefore" ${ro}>${escapeHtml(data.beforeMass||'')}</textarea></div>
+    <div class="card"><h3>미사 후 기도문</h3><textarea id="pAfter" ${ro}>${escapeHtml(data.afterMass||'')}</textarea></div>
+    <div class="card"><h3>사제들을 위한 기도 1</h3><textarea id="pPriest1" ${ro}>${escapeHtml(data.forPriests1||'')}</textarea></div>
+    <div class="card"><h3>사제들을 위한 기도 2</h3><textarea id="pPriest2" ${ro}>${escapeHtml(data.forPriests2||'')}</textarea></div>
+    ${admin ? '<button class="btn wide" id="savePrayersBtn">저장</button>' : '<p class="muted">열람만 가능합니다.</p>'}
+  `;
+  if (admin) document.getElementById('savePrayersBtn').onclick = async () => {
+    await dbSet('prayers/main', { beforeMass: document.getElementById('pBefore').value, afterMass: document.getElementById('pAfter').value, forPriests1: document.getElementById('pPriest1').value, forPriests2: document.getElementById('pPriest2').value });
+    alert('저장되었습니다.');
+  };
+}
+
+/* ---------- render dispatcher ---------- */
+function render(tab){
+  if (tab==='home') renderHome();
+  if (tab==='settings') renderSettings();
+  if (tab==='rules') renderRules();
+  if (tab==='members') renderMembers();
+  if (tab==='meetings') renderMeetings();
+  if (tab==='schedule') renderSchedule();
+  if (tab==='prayers') renderPrayers();
+}
+
+updateHeader();
+updateAdminBtn();
+registerSW();
+render('home');
+</script>
+</body>
+</html>
